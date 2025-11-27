@@ -15,10 +15,23 @@ A Deno-based health monitoring system for the Umami → BigQuery data pipeline. 
 
 ## Architecture
 
-```
-Umami → BigQuery
-  ↓         ↓
-Probe → Verify → Alert (Slack)
+```mermaid
+flowchart LR
+A[Smoke Test Service]
+B[Umami-proxy<br>umami.nav.no/api/send]
+C[Umami<br>🔒]
+D[(postgres<br>🔒)]
+E[(BigQuery<br>v1🔒 or v2)]
+F@{shape: cloud, label: Slack<br>#researchops-intern}
+G[Metabase]
+
+A -->|HTTP Request<br>every minute?| B
+B .-> C
+C .-> D
+D .->|Datastream<br>🔒| E
+E .->|SQL Query<br>response| G
+A -->|Check ❌ or ✅| E
+A -->|Notify if unhealthy ❌| F
 ```
 
 1. **Inject**: Send probe data with UUID to Umami
