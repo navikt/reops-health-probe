@@ -1,0 +1,31 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-env --allow-read src/main.ts",
+    "dev": "deno run --watch --allow-net --allow-env --allow-read src/main.ts",
+    "check": "deno check src/**/*.ts"
+  },
+  "imports": {
+    "@std/dotenv": "jsr:@std/dotenv@^0.225",
+    "@slack/web-api": "npm:@slack/web-api@^7.12.0",
+    "ms": "npm:ms@^2.1.3"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "lib": ["deno.window"]
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
