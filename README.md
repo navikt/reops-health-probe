@@ -1,6 +1,6 @@
-# Health Probe - Data Pipeline Monitor
+# reops-health-probe
 
-A Deno-based health monitoring system that continuously injects probe data into a pipeline and verifies it arrives at the expected destination, sending Slack alerts when issues are detected.
+Deno service that continuously runs probes against data pipelines and exposes results as Prometheus metrics. Sends Slack alerts on failure and recovery.
 
 ## How it works
 
@@ -17,209 +17,88 @@ A -->|2. Verify probe arrived| C
 A -->|3. Alert if not found| D
 ```
 
-Each probe: injects a uniquely identifiable event, waits for the pipeline to process it, then queries the destination to confirm it arrived. Alerts via Slack if the probe is not found within the timeout.
+Each probe injects a uniquely identifiable event, waits for the pipeline to process it, then queries the destination to confirm it arrived. Alerts via Slack on failure — and again when it recovers.
+
+## Probes
+
+### `innblikk-pipeline`
+
+Tests the Innblikk → BigQuery pipeline. Sends an event via the Innblikk proxy and verifies it appears in BigQuery within 10 minutes.
+
+Runs every 12 minutes via `Deno.cron`.
+
+## Metrics
+
+Exposed at `:9091/metrics` in Prometheus text format.
+
+| Metric | Type | Description |
+|---|---|---|
+| `probe_success` | gauge | `1` if last run succeeded, `0` if failed |
+| `probe_duration_seconds` | gauge | Duration of last probe run |
+| `probe_ingress_status_code` | gauge | HTTP status from ingress on last run |
+| `probe_last_run_timestamp_seconds` | gauge | Unix timestamp of last run |
+
+All metrics carry a `probe` label with the probe name.
 
 ## Configuration
 
-### Environment Variables
-
-Create a `.env` file (see `.env.example`):
+Environment variables (create a `.env` file locally):
 
 ```bash
-# Innblikk Configuration
-INGRESS_URL=https://your-innblikk-proxy.nav.no
+# Innblikk proxy
+INGRESS_URL=https://reops-event-proxy.ekstern.dev.nav.no
 WEBSITE_ID=your-website-id
 
-# Slack Configuration
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-SLACK_SIGNING_SECRET=your-slack-signing-secret
+# BigQuery dataset/table (defaults to innblikk pipeline values)
+BQ_PROJECT=team-researchops-prod-01d6
+BQ_DATASET=umami_custom
+BQ_TABLE=public_website_event
 
-# BigQuery Configuration (Workload Identity on NAIS)
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-GCP_SERVICE_ACCOUNT=your-service-account@your-project.iam.gserviceaccount.com
-```
-
-### Application Settings
-
-Edit `config.json` to adjust timing and channels:
-
-```json
-{
-  "probe": {
-    "interval": "5 minutes",        // How often to run probes
-    "initialDelay": "2 minutes",    // Wait time before first check
-    "checkInterval": "1 minute",    // Interval between checks
-    "maxWaitTime": "15 minutes"     // Max time to wait for probe
-  },
-  "alerting": {
-    "repeatInterval": "30 minutes", // Repeat alert frequency
-    "escalationDelay": "60 minutes", // Time before escalation
-    "primaryChannel": "#researchops-alerts",
-    "escalationChannel": "#produksjonshendelser"
-  }
-}
+# Slack
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
 ## Development
 
-### Prerequisites
-
-- [Deno](https://deno.land/) v1.40+
-
-### Install Dependencies
-
-Dependencies are automatically downloaded when you run the application.
-
-### Run Locally
+Requires [Deno](https://deno.land/) v2+.
 
 ```bash
-# Copy example env file
-cp .env.example .env
-
-# Edit .env with your credentials
-nano .env
-
-# Run the application
-deno task start
-
-# Or run in development mode with watch
+# Run with auto-reload
 deno task dev
-```
 
-### Type Check
-
-```bash
+# Type-check
 deno task check
 ```
 
-## Deployment (NAIS)
+## Deployment
 
-### Prerequisites
+Docker image built from `Dockerfile`. Uses GCP Workload Identity for BigQuery access — no service account keys needed.
 
-- NAIS cluster access
-- Workload Identity configured for BigQuery access
-- Slack app with bot token
-
-### Deploy
-
-1. Update `config.json` with production values
-2. Ensure secrets are configured in NAIS:
-   - `WEBSITE_ID`
-   - `SLACK_BOT_TOKEN`
-3. Deploy using NAIS deploy pipeline
-
-### NAIS Configuration
-
-The application uses:
-- **Workload Identity** for BigQuery authentication (no service account keys needed)
-- **Environment variables** for secrets
-- **Health checks** via NAIS standard endpoints
-
-## Project Structure
-
-```
-health-probe/
-├── deno.json                    # Deno configuration & dependencies
-├── config.json                  # Application settings
-├── .env.example                 # Environment variables template
-└── src/
-    ├── main.ts                  # Application entry point
-    ├── config/
-    │   ├── types.ts             # TypeScript interfaces
-    │   └── loader.ts            # Configuration loader
-    ├── probe/
-    │   └── injector.ts          # Umami probe injection
-    ├── verifier/
-    │   └── bigquery.ts          # BigQuery verification
-    ├── alerting/
-    │   └── slack.ts             # Slack integration
-    ├── scheduler/
-    │   └── scheduler.ts         # Probe scheduling logic
-    ├── state/
-    │   └── store.ts             # State management
-    └── utils/
-        ├── time.ts              # Time parsing utilities
-        └── logger.ts            # Logging utilities
+```bash
+docker build -t reops-health-probe .
+docker run --env-file .env reops-health-probe
 ```
 
-## How It Works
+## Adding a probe
 
-### Probe Cycle
+1. Create `src/probes/<name>.ts` exporting a `Probe` object:
 
-1. **Inject Probe**: Generate UUID and send to Umami API
-2. **Wait**: Sleep for 2 minutes (let data flow through pipeline)
-3. **Verify**: Check BigQuery every 1 minute for up to 15 minutes
-4. **Alert**: If probe not found, send Slack alert
-5. **Repeat**: Run next probe in 5 minutes
+```ts
+import type { Probe } from "../lib/runner.ts";
 
-### Alerting Flow
-
-```
-Failure Detected
-    ↓
-Send Initial Alert (#researchops-alerts)
-    ↓
-Wait 30 minutes
-    ↓
-Still failing? → Update Alert
-    ↓
-60 minutes passed & not acknowledged?
-    ↓
-Escalate to #produksjonshendelser
-    ↓
-Pipeline recovered? → Send Recovery Alert
+export const myProbe: Probe = {
+  name: "my-probe",
+  async run() {
+    // inject something, wait, verify
+    return { ok: true, durationMs: 0, ingressStatusCode: 200 };
+  },
+};
 ```
 
-### State Management
+2. Register it in `src/main.ts`:
 
-The application maintains in-memory state to:
-- Track current failing probe
-- Prevent duplicate alerts
-- Manage acknowledgment status
-- Control escalation timing
+```ts
+import { myProbe } from "./probes/my-probe.ts";
 
-## Monitoring
-
-### Logs
-
-All logs are JSON-formatted with timestamps:
-
-```json
-{
-  "timestamp": "2024-11-25T10:30:00.000Z",
-  "level": "info",
-  "message": "Probe injected successfully",
-  "data": { "probeId": "550e8400-e29b-41d4-a716-446655440000" }
-}
+Deno.cron("probe:my-probe", { minute: { every: 5 } }, () => runProbe(myProbe));
 ```
-
-### Metrics
-
-Key metrics to monitor:
-- Probe success/failure rate
-- Time to detect failures
-- Alert frequency
-- Recovery time
-
-## Troubleshooting
-
-### Common Issues
-
-**BigQuery authentication fails**
-- Verify Workload Identity is configured correctly
-- Check `GCP_SERVICE_ACCOUNT` environment variable
-- Ensure service account has BigQuery read permissions
-
-**Innblikk probe injection fails**
-- Verify `INGRESS_URL` and `WEBSITE_ID`
-- Check Innblikk proxy endpoint is accessible
-- Verify `WEBSITE_ID` env var
-
-**Slack alerts not sending**
-- Verify `SLACK_BOT_TOKEN` is valid
-- Check bot has permission to post in channels
-- Verify channel names in config.json (include #)
-
-## License
-
-MIT
