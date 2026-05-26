@@ -12,4 +12,4 @@ RUN deno cache src/main.ts
 
 USER deno
 
-CMD ["deno", "run", "--allow-net", "--allow-env", "--unstable-cron", "src/main.ts"]
+CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "--unstable-cron", "src/main.ts"]
