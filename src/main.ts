@@ -9,7 +9,7 @@ const probes = [innblikkPipelineProbe];
 
 for (const probe of probes) {
   registerProbe(probe.name);
-  Deno.cron(`probe:${probe.name}`, { minute: { every: 12 } }, () => runProbe(probe));
+  Deno.cron(`probe-${probe.name}`, { minute: { every: 12 } }, () => runProbe(probe));
 }
 
 const server = Deno.serve({ port: 9091 }, (req) => {
