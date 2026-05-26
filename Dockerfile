@@ -1,9 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# digestabot:cgr.dev/chainguard/wolfi-base
-FROM cgr.dev/chainguard/wolfi-base@sha256:5743937d521cbeb9e8c73bf1bd7ba2589c178940eb03d7b148efecc962be8587
-
-RUN apk add --no-cache deno
+# digestabot:denoland/deno
+FROM denoland/deno:2.7.11@sha256:869e31370dca82b10abefeabe92a2efae44c0d8c70e03776b05ca07ce6b2e062
 
 WORKDIR /app
 
@@ -12,6 +10,6 @@ COPY src/ ./src/
 
 RUN deno cache src/main.ts
 
-USER nonroot
+USER deno
 
 CMD ["deno", "run", "--allow-net", "--allow-env", "--unstable-cron", "src/main.ts"]

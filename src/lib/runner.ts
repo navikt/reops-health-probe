@@ -1,4 +1,5 @@
 import { recordProbe } from "./metrics.ts";
+import { isPaused, recordRun } from "./state.ts";
 import { slackAlert } from "./slack.ts";
 
 export interface ProbeResult {
@@ -16,6 +17,11 @@ export interface Probe {
 const failingProbes = new Set<string>();
 
 export async function runProbe(probe: Probe): Promise<void> {
+  if (isPaused(probe.name)) {
+    console.log(`[runner] probe PAUSED, skipping: ${probe.name}`);
+    return;
+  }
+
   console.log(`[runner] running probe: ${probe.name}`);
 
   let result: ProbeResult;
@@ -29,6 +35,8 @@ export async function runProbe(probe: Probe): Promise<void> {
       ingressStatusCode: 0,
     };
   }
+
+  recordRun(probe.name, result);
 
   recordProbe(probe.name, {
     success: result.ok,
