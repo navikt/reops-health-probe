@@ -12,6 +12,11 @@ for (const probe of probes) {
   Deno.cron(`probe-${probe.name}`, { minute: { every: 12 } }, () => runProbe(probe));
 }
 
+// Run all probes once on startup so metrics are populated immediately
+for (const probe of probes) {
+  runProbe(probe);
+}
+
 const server = Deno.serve({ port: 9091 }, (req) => {
   const url = new URL(req.url);
   const { pathname } = url;
@@ -31,10 +36,21 @@ const server = Deno.serve({ port: 9091 }, (req) => {
   }
 
   // GET /metrics
-  if (req.method === "GET" && pathname === "/metrics") {
+  if (req.method === "GET" && (pathname === "/metrics" || pathname === "/metrics/")) {
     return new Response(renderMetrics(), {
       headers: { "Content-Type": "text/plain; version=0.0.4" },
     });
+  }
+
+  // POST /admin/run/:name
+  const runMatch = pathname.match(/^\/admin\/run\/(.+)$/);
+  if (req.method === "POST" && runMatch) {
+    const name = decodeURIComponent(runMatch[1]);
+    const probe = probes.find((p) => p.name === name);
+    if (!probe) return new Response("Not Found", { status: 404 });
+    console.log(`[admin] manual trigger: ${name}`);
+    runProbe(probe); // fire-and-forget
+    return Response.redirect(new URL("/", req.url), 303);
   }
 
   // POST /admin/pause/:name

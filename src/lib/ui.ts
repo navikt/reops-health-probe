@@ -42,6 +42,8 @@ function probeCard(name: string): string {
     ? `<div class="meta">Last run: <strong>${relativeTime(latest.timestamp)}</strong> · ${formatTimestamp(latest.timestamp)} · Duration: <strong>${formatDuration(latest.result.durationMs)}</strong> · Ingress: <strong>${latest.result.ingressStatusCode}</strong></div>`
     : `<div class="meta">No runs recorded yet.</div>`;
 
+  const runBtn = `<form method="POST" action="/admin/run/${encodeURIComponent(name)}"><button class="btn btn-run">⚡ Run now</button></form>`;
+
   const pauseBtn = state.paused
     ? `<form method="POST" action="/admin/resume/${encodeURIComponent(name)}"><button class="btn btn-resume">▶ Resume</button></form>`
     : `<form method="POST" action="/admin/pause/${encodeURIComponent(name)}"><button class="btn btn-pause">⏸ Pause</button></form>`;
@@ -58,7 +60,7 @@ function probeCard(name: string): string {
         <code>${name}</code>
         ${statusLabel}
       </div>
-      <div class="card-actions">${pauseBtn}</div>
+      <div class="card-actions">${runBtn}${pauseBtn}</div>
     </div>
     ${failMsg}
     ${lastRunInfo}
@@ -90,6 +92,7 @@ export function renderDashboard(): string {
     .card-paused { border-color: #744210; background: #1a1a0e; }
     .card-fail { border-color: #742a2a; background: #1a0e0e; }
     .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
+    .card-actions { display: flex; gap: 0.5rem; align-items: center; }
     .card-title { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
     .card-title code { font-size: 1rem; font-weight: 600; background: #2d3748; padding: 0.2rem 0.5rem; border-radius: 0.25rem; }
     .badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 0.25rem; letter-spacing: 0.05em; }
@@ -105,6 +108,8 @@ export function renderDashboard(): string {
     .dot-ok { background: #38a169; }
     .dot-fail { background: #e53e3e; }
     .btn { border: none; border-radius: 0.375rem; padding: 0.35rem 0.85rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .btn-run { background: #1a3a5c; color: #63b3ed; }
+    .btn-run:hover { background: #2a5a8c; }
     .btn-pause { background: #744210; color: #f6ad55; }
     .btn-pause:hover { background: #975a16; }
     .btn-resume { background: #1c4532; color: #68d391; }
