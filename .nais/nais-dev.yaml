@@ -29,5 +29,8 @@ spec:
     outbound:
       external:
         - host: hooks.slack.com
+        - host: reops-event-proxy.ekstern.dev.nav.no
+        - host: bigquery.googleapis.com
+        - host: oauth2.googleapis.com
   envFrom:
     - secret: reops-health-probe

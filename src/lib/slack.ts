@@ -5,12 +5,16 @@ export async function slackAlert(message: string): Promise<void> {
     console.warn("[slack] SLACK_WEBHOOK_URL not set, skipping alert");
     return;
   }
-  const res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: message }),
-  });
-  if (!res.ok) {
-    console.error(`[slack] webhook failed: ${res.status} ${await res.text()}`);
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: message }),
+    });
+    if (!res.ok) {
+      console.error(`[slack] webhook failed: ${res.status} ${await res.text()}`);
+    }
+  } catch (err) {
+    console.warn(`[slack] webhook error (skipping): ${err instanceof Error ? err.message : err}`);
   }
 }
