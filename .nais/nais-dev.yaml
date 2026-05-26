@@ -8,7 +8,7 @@ metadata:
 spec:
   image: "{{ image }}"
   ingresses:
-    - https://reops-health-probe.dev.intern.nav.no
+    - https://reops-health-probe.ansatt.dev.nav.no
   port: 9091
   replicas:
     min: 1
