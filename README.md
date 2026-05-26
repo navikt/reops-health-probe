@@ -42,21 +42,14 @@ All metrics carry a `probe` label with the probe name.
 
 ## Configuration
 
-Environment variables (create a `.env` file locally):
+Only one environment variable is required — probe-specific config lives in the probe source itself.
 
 ```bash
-# Innblikk proxy
-INGRESS_URL=https://reops-event-proxy.ekstern.dev.nav.no
-WEBSITE_ID=your-website-id
-
-# BigQuery dataset/table (defaults to innblikk pipeline values)
-BQ_PROJECT=team-researchops-prod-01d6
-BQ_DATASET=umami_custom
-BQ_TABLE=public_website_event
-
-# Slack
+# Slack alerting (required)
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
+
+Probe targets (URLs, project IDs, table names) are hardcoded in each probe file. To change them, edit the probe directly.
 
 ## Development
 
@@ -81,7 +74,7 @@ docker run --env-file .env reops-health-probe
 
 ## Adding a probe
 
-1. Create `src/probes/<name>.ts` exporting a `Probe` object:
+1. Create `src/probes/<name>.ts` exporting a `Probe` object. Hardcode all probe-specific config (URLs, project IDs, etc.) directly in the file:
 
 ```ts
 import type { Probe } from "../lib/runner.ts";
@@ -100,5 +93,6 @@ export const myProbe: Probe = {
 ```ts
 import { myProbe } from "./probes/my-probe.ts";
 
+registerProbe(myProbe.name);
 Deno.cron("probe:my-probe", { minute: { every: 5 } }, () => runProbe(myProbe));
 ```

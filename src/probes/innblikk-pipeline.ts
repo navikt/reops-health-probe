@@ -1,11 +1,11 @@
 import { bqQuery } from "../lib/bigquery.ts";
 import type { Probe, ProbeResult } from "../lib/runner.ts";
 
-const INGRESS_URL = Deno.env.get("INGRESS_URL") ?? "https://reops-event-proxy.ekstern.dev.nav.no";
-const WEBSITE_ID = Deno.env.get("WEBSITE_ID") ?? "96a8b610-7391-45f5-9253-84bee2333669";
-const BQ_PROJECT = Deno.env.get("BQ_PROJECT") ?? "team-researchops-prod-01d6";
-const BQ_DATASET = Deno.env.get("BQ_DATASET") ?? "umami_custom";
-const BQ_TABLE = Deno.env.get("BQ_TABLE") ?? "public_website_event";
+const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
+const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
+const BQ_PROJECT = "team-researchops-prod-01d6";
+const BQ_DATASET = "umami_custom";
+const BQ_TABLE = "public_website_event";
 
 const WAIT_MS = 10 * 60 * 1000; // 10 minutes
 
