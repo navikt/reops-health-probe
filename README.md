@@ -1,43 +1,23 @@
 # Health Probe - Data Pipeline Monitor
 
-A Deno-based health monitoring system for the Umami → BigQuery data pipeline. The system continuously injects probe data into Umami and verifies it appears in BigQuery, sending intelligent Slack alerts when issues are detected.
+A Deno-based health monitoring system that continuously injects probe data into a pipeline and verifies it arrives at the expected destination, sending Slack alerts when issues are detected.
 
-## Features
-
-- **Automated Health Checks**: Runs probes every 5 minutes
-- **Smart Alerting**: 
-  - Immediate alert on first failure
-  - Repeat alerts every 30 minutes if unresolved
-  - Interactive "Jobber med saken" button to acknowledge issues
-  - Auto-escalate to `#produksjonshendelser` after 60 minutes if unacknowledged
-- **Recovery Notifications**: Automatically sends recovery alerts when pipeline is restored
-- **Structured Logging**: JSON-formatted logs for easy parsing and monitoring
-
-## Architecture
+## How it works
 
 ```mermaid
 flowchart LR
-A[Smoke Test Service]
-B[Umami-proxy<br>umami.nav.no/api/send]
-C[Umami<br>🔒]
-D[(postgres<br>🔒)]
-E[(BigQuery<br>v1🔒 or v2)]
-F@{shape: cloud, label: Slack<br>#researchops-intern}
-G[Metabase]
+A[Health Probe]
+B[Pipeline Ingress]
+C[(Expected Destination)]
+D@{shape: cloud, label: Slack}
 
-A -->|HTTP Request<br>every minute?| B
-B .-> C
-C .-> D
-D .->|Datastream<br>🔒| E
-E .->|SQL Query<br>response| G
-A -->|Check ❌ or ✅| E
-A -->|Notify if unhealthy ❌| F
+A -->|1. Inject probe with UUID| B
+B -.->|pipeline processes data| C
+A -->|2. Verify probe arrived| C
+A -->|3. Alert if not found| D
 ```
 
-1. **Inject**: Send probe data with UUID to Umami
-2. **Verify**: Query BigQuery to confirm probe data arrived
-3. **Alert**: Send Slack notifications if probe not found
-4. **Escalate**: Escalate to production channel if unacknowledged
+Each probe: injects a uniquely identifiable event, waits for the pipeline to process it, then queries the destination to confirm it arrived. Alerts via Slack if the probe is not found within the timeout.
 
 ## Configuration
 
@@ -46,9 +26,9 @@ A -->|Notify if unhealthy ❌| F
 Create a `.env` file (see `.env.example`):
 
 ```bash
-# Umami Configuration
-UMAMI_BASE_URL=https://your-umami-instance.com
-UMAMI_API_KEY=your-umami-api-key
+# Innblikk Configuration
+INGRESS_URL=https://your-innblikk-proxy.nav.no
+WEBSITE_ID=your-website-id
 
 # Slack Configuration
 SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
@@ -124,7 +104,7 @@ deno task check
 
 1. Update `config.json` with production values
 2. Ensure secrets are configured in NAIS:
-   - `UMAMI_API_KEY`
+   - `WEBSITE_ID`
    - `SLACK_BOT_TOKEN`
 3. Deploy using NAIS deploy pipeline
 
@@ -230,10 +210,10 @@ Key metrics to monitor:
 - Check `GCP_SERVICE_ACCOUNT` environment variable
 - Ensure service account has BigQuery read permissions
 
-**Umami probe injection fails**
-- Verify `UMAMI_BASE_URL` and `UMAMI_API_KEY`
-- Check Umami API endpoint is accessible
-- Verify `websiteId` in config.json
+**Innblikk probe injection fails**
+- Verify `INGRESS_URL` and `WEBSITE_ID`
+- Check Innblikk proxy endpoint is accessible
+- Verify `WEBSITE_ID` env var
 
 **Slack alerts not sending**
 - Verify `SLACK_BOT_TOKEN` is valid

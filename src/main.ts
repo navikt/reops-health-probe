@@ -1,76 +1,24 @@
-import { loadConfig } from "./config/loader.ts";
-import { logger } from "./utils/logger.ts";
-import { ProbeInjector } from "./probe/injector.ts";
-import { BigQueryVerifier } from "./verifier/bigquery.ts";
-import { SlackAlerter } from "./alerting/slack.ts";
-import { StateStore } from "./state/store.ts";
-import { ProbeScheduler } from "./scheduler/scheduler.ts";
+import "@std/dotenv/load";
+import { renderMetrics } from "./lib/metrics.ts";
+import { runProbe } from "./lib/runner.ts";
+import { innblikkPipelineProbe } from "./probes/innblikk-pipeline.ts";
 
-async function main() {
-  logger.info("Starting Health Probe application");
+const probes = [innblikkPipelineProbe];
 
-  try {
-    // Load configuration
-    logger.info("Loading configuration");
-    const config = await loadConfig();
+for (const probe of probes) {
+  Deno.cron(`probe:${probe.name}`, { minute: { every: 12 } }, () => runProbe(probe));
+}
 
-    // Initialize components
-    logger.info("Initializing components");
-
-    const injector = new ProbeInjector(
-      config.env.umamiBaseUrl,
-      config.env.umamiApiKey,
-      config.app.umami.websiteId,
-      config.app.umami.probeEventName,
-    );
-
-    const verifier = new BigQueryVerifier(
-      config.app.bigquery.projectId,
-      config.app.bigquery.datasetId,
-      config.app.bigquery.tableId,
-      config.app.bigquery.probeField,
-    );
-
-    const alerter = new SlackAlerter(
-      config.env.slackBotToken,
-      config.app.alerting.primaryChannel,
-      config.app.alerting.escalationChannel,
-    );
-
-    const store = new StateStore();
-
-    const scheduler = new ProbeScheduler(
-      config,
-      injector,
-      verifier,
-      alerter,
-      store,
-    );
-
-    // Handle graceful shutdown
-    const shutdownHandler = () => {
-      logger.info("Received shutdown signal");
-      scheduler.stop();
-      Deno.exit(0);
-    };
-
-    Deno.addSignalListener("SIGINT", shutdownHandler);
-    Deno.addSignalListener("SIGTERM", shutdownHandler);
-
-    // Start the scheduler
-    scheduler.start();
-
-    logger.info("Health Probe application started successfully");
-
-    // Keep the process running
-    await new Promise(() => {});
-  } catch (error) {
-    logger.error("Fatal error in main", error);
-    Deno.exit(1);
+const server = Deno.serve({ port: 9091 }, (req) => {
+  const url = new URL(req.url);
+  if (url.pathname === "/metrics") {
+    return new Response(renderMetrics(), {
+      headers: { "Content-Type": "text/plain; version=0.0.4" },
+    });
   }
-}
+  return new Response("Not Found", { status: 404 });
+});
 
-// Run the application
-if (import.meta.main) {
-  main();
-}
+console.log("reops-health-probe started — metrics on :9091/metrics");
+
+await server.finished;

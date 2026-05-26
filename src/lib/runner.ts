@@ -1,0 +1,53 @@
+import { recordProbe } from "./metrics.ts";
+import { slackAlert } from "./slack.ts";
+
+export interface ProbeResult {
+  ok: boolean;
+  message?: string;
+  durationMs: number;
+  ingressStatusCode: number;
+}
+
+export interface Probe {
+  name: string;
+  run(): Promise<ProbeResult>;
+}
+
+const failingProbes = new Set<string>();
+
+export async function runProbe(probe: Probe): Promise<void> {
+  console.log(`[runner] running probe: ${probe.name}`);
+
+  let result: ProbeResult;
+  try {
+    result = await probe.run();
+  } catch (err) {
+    result = {
+      ok: false,
+      message: err instanceof Error ? err.message : String(err),
+      durationMs: 0,
+      ingressStatusCode: 0,
+    };
+  }
+
+  recordProbe(probe.name, {
+    success: result.ok,
+    durationMs: result.durationMs,
+    ingressStatusCode: result.ingressStatusCode,
+  });
+
+  const wasFailing = failingProbes.has(probe.name);
+
+  if (!result.ok) {
+    failingProbes.add(probe.name);
+    const msg = result.message ?? "unknown error";
+    console.error(`[runner] probe FAILED: ${probe.name} — ${msg}`);
+    await slackAlert(`🔴 *${probe.name}* probe failed: ${msg}`);
+  } else if (wasFailing) {
+    failingProbes.delete(probe.name);
+    console.log(`[runner] probe RECOVERED: ${probe.name}`);
+    await slackAlert(`✅ *${probe.name}* probe recovered`);
+  } else {
+    console.log(`[runner] probe OK: ${probe.name} (${result.durationMs}ms)`);
+  }
+}
