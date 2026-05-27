@@ -12,7 +12,10 @@ const WAIT_MS = 48 * 60 * 1000; // 48 minutes
 async function sendProbeEvent(probeId: string): Promise<number> {
   const res = await fetch(`${INGRESS_URL}/api/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Opt-Out-Filters": "uuid",
+    },
     body: JSON.stringify({
       type: "event",
       payload: {
