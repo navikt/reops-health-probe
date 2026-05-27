@@ -7,7 +7,7 @@ const BQ_PROJECT = "team-researchops-dev-4396";
 const BQ_DATASET = "custom_umami_views";
 const BQ_VIEW = "custom_umami_view_event_data";
 
-const WAIT_MS = 10 * 60 * 1000; // 10 minutes
+const WAIT_MS = 48 * 60 * 1000; // 48 minutes
 
 async function sendProbeEvent(probeId: string): Promise<number> {
   const res = await fetch(`${INGRESS_URL}/api/send`, {
@@ -31,7 +31,10 @@ async function sendProbeEvent(probeId: string): Promise<number> {
   return res.status;
 }
 
-async function checkBigQuery(probeId: string, sentAt: number): Promise<boolean> {
+async function checkBigQuery(
+  probeId: string,
+  sentAt: number,
+): Promise<boolean> {
   // Query the end-user-facing view (custom_umami_view_event_data) which reads from
   // event_data_transformed — populated by the scheduled query every 5 minutes.
   // event_parameters is a REPEATED RECORD; UNNEST to search within it.
@@ -46,7 +49,11 @@ async function checkBigQuery(probeId: string, sentAt: number): Promise<boolean> 
   `;
   const result = await bqQuery(BQ_PROJECT, query, [
     { name: "website_id", type: "STRING", value: WEBSITE_ID },
-    { name: "sent_at", type: "TIMESTAMP", value: new Date(sentAt).toISOString() },
+    {
+      name: "sent_at",
+      type: "TIMESTAMP",
+      value: new Date(sentAt).toISOString(),
+    },
     { name: "probe_id", type: "STRING", value: probeId },
   ]);
   const cnt = parseInt(result.rows?.[0]?.[0]?.v ?? "0", 10);
@@ -71,7 +78,9 @@ export const innblikkPipelineProbe: Probe = {
       };
     }
 
-    console.log(`[innblikk-pipeline] probe sent (id=${probeId}), waiting ${WAIT_MS / 1000}s for BQ...`);
+    console.log(
+      `[innblikk-pipeline] probe sent (id=${probeId}), waiting ${WAIT_MS / 1000}s for BQ...`,
+    );
     await new Promise((resolve) => setTimeout(resolve, WAIT_MS));
 
     const found = await checkBigQuery(probeId, start);
