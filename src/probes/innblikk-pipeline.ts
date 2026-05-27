@@ -4,7 +4,8 @@ import type { Probe, ProbeResult } from "../lib/runner.ts";
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
 const BQ_PROJECT = "team-researchops-prod-01d6";
-const BQ_DATASET = "umami_custom";
+const BQ_DATASET = "custom_umami_views";
+const BQ_VIEW = "custom_umami_view_event_data";
 
 const WAIT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -31,19 +32,17 @@ async function sendProbeEvent(probeId: string): Promise<number> {
 }
 
 async function checkBigQuery(probeId: string, sentAt: number): Promise<boolean> {
-  // public_website_event has no partition — filter on website_id + created_at to limit scan.
-  // probe_id is stored as a key-value row in public_event_data, joined via website_event_id.
+  // Query the end-user-facing view (custom_umami_view_event_data) which reads from
+  // event_data_transformed — populated by the scheduled query every 5 minutes.
+  // event_parameters is a REPEATED RECORD; UNNEST to search within it.
   const query = `
     SELECT COUNT(*) AS cnt
-    FROM \`${BQ_PROJECT}.${BQ_DATASET}.public_website_event\` e
-    JOIN \`${BQ_PROJECT}.${BQ_DATASET}.public_event_data\` d
-      ON d.website_event_id = e.event_id
-    WHERE e.website_id = @website_id
-      AND e.created_at >= @sent_at
-      AND e.created_at <= TIMESTAMP_ADD(@sent_at, INTERVAL 35 MINUTE)
-      AND e.event_name = 'health_probe'
-      AND d.data_key = 'probe_id'
-      AND d.string_value = @probe_id
+    FROM \`${BQ_PROJECT}.${BQ_DATASET}.${BQ_VIEW}\`,
+    UNNEST(event_parameters) AS param
+    WHERE website_id = @website_id
+      AND created_at >= @sent_at
+      AND param.data_key = 'probe_id'
+      AND param.string_value = @probe_id
   `;
   const result = await bqQuery(BQ_PROJECT, query, [
     { name: "website_id", type: "STRING", value: WEBSITE_ID },
