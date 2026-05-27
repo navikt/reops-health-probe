@@ -5,12 +5,16 @@ import { slackAlert } from "./slack.ts";
 export interface ProbeResult {
   ok: boolean;
   message?: string;
+  /** Raw error detail — response body, stack trace, etc. Shown verbatim on the dashboard. */
+  errorDetails?: string;
   durationMs: number;
   ingressStatusCode: number;
 }
 
 export interface Probe {
   name: string;
+  /** Cron schedule. Example: `{ minute: { every: 12 } }` */
+  schedule: Deno.CronSchedule;
   run(): Promise<ProbeResult>;
 }
 
@@ -29,9 +33,12 @@ export async function runProbe(probe: Probe): Promise<void> {
   try {
     result = await probe.run();
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const errorDetails = err instanceof Error && err.stack ? err.stack : undefined;
     result = {
       ok: false,
-      message: err instanceof Error ? err.message : String(err),
+      message,
+      errorDetails,
       durationMs: 0,
       ingressStatusCode: 0,
     };

@@ -72,7 +72,8 @@ async function getAccessToken(): Promise<string> {
 }
 
 export interface BQQueryResult {
-  rows: Record<string, string>[][];
+  // BQ REST response: rows[n].f[m].v
+  rows: { f: { v: string }[] }[];
   totalRows: number;
 }
 
@@ -110,7 +111,7 @@ export async function bqQuery(
 
   const data = await res.json();
   return {
-    rows: (data.rows ?? []) as Record<string, string>[][],
+    rows: (data.rows ?? []) as { f: { v: string }[] }[],
     totalRows: parseInt(data.totalRows ?? "0", 10),
   };
 }

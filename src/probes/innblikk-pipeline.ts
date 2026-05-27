@@ -9,29 +9,39 @@ const BQ_VIEW = "custom_umami_view_event_data";
 
 const WAIT_MS = 48 * 60 * 1000; // 48 minutes
 
-async function sendProbeEvent(probeId: string): Promise<number> {
+const INGRESS_PAYLOAD = (probeId: string) => ({
+  type: "event",
+  payload: {
+    website: WEBSITE_ID,
+    url: "/health-probe",
+    hostname: "reops-health-probe",
+    language: "en-US",
+    referrer: "",
+    screen: "1920x1080",
+    title: "Health Probe",
+    name: "health_probe",
+    data: { probe_id: probeId },
+  },
+});
+
+interface IngressResult {
+  statusCode: number;
+  /** Response body — useful for debugging failures */
+  body: string;
+}
+
+async function sendProbeEvent(probeId: string): Promise<IngressResult> {
+  const payload = INGRESS_PAYLOAD(probeId);
   const res = await fetch(`${INGRESS_URL}/api/send`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Opt-Out-Filters": "uuid",
     },
-    body: JSON.stringify({
-      type: "event",
-      payload: {
-        website: WEBSITE_ID,
-        url: "/health-probe",
-        hostname: "reops-health-probe",
-        language: "en-US",
-        referrer: "",
-        screen: "1920x1080",
-        title: "Health Probe",
-        name: "health_probe",
-        data: { probe_id: probeId },
-      },
-    }),
+    body: JSON.stringify(payload),
   });
-  return res.status;
+  const body = await res.text();
+  return { statusCode: res.status, body };
 }
 
 async function checkBigQuery(
@@ -59,25 +69,27 @@ async function checkBigQuery(
     },
     { name: "probe_id", type: "STRING", value: probeId },
   ]);
-  const cnt = parseInt(result.rows?.[0]?.[0]?.v ?? "0", 10);
+  const cnt = parseInt(result.rows?.[0]?.f?.[0]?.v ?? "0", 10);
   return cnt > 0;
 }
 
 export const innblikkPipelineProbe: Probe = {
   name: "innblikk-pipeline",
+  schedule: { minute: { every: 12 } },
 
   async run(): Promise<ProbeResult> {
     const probeId = crypto.randomUUID();
     const start = Date.now();
 
-    const ingressStatusCode = await sendProbeEvent(probeId);
+    const ingress = await sendProbeEvent(probeId);
 
-    if (ingressStatusCode < 200 || ingressStatusCode >= 300) {
+    if (ingress.statusCode < 200 || ingress.statusCode >= 300) {
       return {
         ok: false,
-        message: `Ingress returned HTTP ${ingressStatusCode}`,
+        message: `Ingress returned HTTP ${ingress.statusCode}`,
+        errorDetails: `POST ${INGRESS_URL}/api/send\nPayload: ${JSON.stringify(INGRESS_PAYLOAD(probeId), null, 2)}\n\nResponse (${ingress.statusCode}):\n${ingress.body}`,
         durationMs: Date.now() - start,
-        ingressStatusCode,
+        ingressStatusCode: ingress.statusCode,
       };
     }
 
@@ -92,12 +104,13 @@ export const innblikkPipelineProbe: Probe = {
     if (!found) {
       return {
         ok: false,
-        message: `Probe event (id=${probeId}) not found in BigQuery after ${WAIT_MS / 60000} minutes`,
+        message: `Probe event not found in BigQuery after ${WAIT_MS / 60000} minutes`,
+        errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}\nIngress status: ${ingress.statusCode}\nIngress response: ${ingress.body}`,
         durationMs,
-        ingressStatusCode,
+        ingressStatusCode: ingress.statusCode,
       };
     }
 
-    return { ok: true, durationMs, ingressStatusCode };
+    return { ok: true, durationMs, ingressStatusCode: ingress.statusCode };
   },
 };

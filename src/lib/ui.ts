@@ -1,5 +1,9 @@
 import { getAllProbeNames, getProbeState } from "./state.ts";
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function formatDuration(ms: number): string {
   if (ms === 0) return "—";
   if (ms < 1000) return `${ms}ms`;
@@ -56,7 +60,11 @@ function probeCard(name: string): string {
 
   const failMsg =
     latest && !latest.result.ok && !state.paused
-      ? `<div class="fail-msg">⚠ ${latest.result.message ?? "unknown error"}</div>`
+      ? `<div class="fail-msg">⚠ ${latest.result.message ?? "unknown error"}</div>${
+          latest.result.errorDetails
+            ? `<pre class="error-details">${escapeHtml(latest.result.errorDetails)}</pre>`
+            : ""
+        }`
       : "";
 
   return `
@@ -111,7 +119,8 @@ export function renderDashboard(): string {
     .badge-unknown { background: #2d3748; color: #a0aec0; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
     .meta { font-size: 0.8rem; color: #718096; margin-bottom: 0.5rem; }
-    .fail-msg { font-size: 0.8rem; color: #fc8181; background: #2d1515; border-radius: 0.25rem; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
+    .fail-msg { font-size: 0.8rem; color: #fc8181; background: #2d1515; border-radius: 0.25rem; padding: 0.4rem 0.75rem; margin-bottom: 0.5rem; }
+    .error-details { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.75rem; color: #feb2b2; background: #1a0a0a; border: 1px solid #742a2a; border-radius: 0.25rem; padding: 0.75rem; margin-bottom: 0.75rem; white-space: pre-wrap; word-break: break-all; overflow-x: auto; }
     .running-msg { font-size: 0.8rem; color: #90cdf4; background: #0d1e35; border-radius: 0.25rem; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
     .history-label { font-size: 0.7rem; color: #4a5568; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
     .history-dots { display: flex; gap: 3px; flex-wrap: wrap; }
