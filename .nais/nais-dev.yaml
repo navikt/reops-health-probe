@@ -19,12 +19,6 @@ spec:
     requests:
       cpu: "50m"
       memory: 128Mi
-  gcp:
-    permissions:
-      - resource:
-          apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
-          kind: Project
-        role: roles/bigquery.dataViewer
   accessPolicy:
     outbound:
       external:

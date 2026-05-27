@@ -23,6 +23,8 @@ function probeCard(name: string): string {
   const latest = state.history[0];
   const statusLabel = state.paused
     ? `<span class="badge badge-paused">PAUSED</span>`
+    : state.running
+    ? `<span class="badge badge-running">RUNNING</span>`
     : latest == null
     ? `<span class="badge badge-unknown">NO DATA</span>`
     : latest.result.ok
@@ -37,6 +39,10 @@ function probeCard(name: string): string {
       return `<span class="dot ${cls}" title="${tip}"></span>`;
     })
     .join("");
+
+  const runningInfo = state.running && state.runStartedAt
+    ? `<div class="running-msg">⏳ Probe in progress — started ${relativeTime(state.runStartedAt)} (${formatDuration(Date.now() - state.runStartedAt)} elapsed)</div>`
+    : "";
 
   const lastRunInfo = latest
     ? `<div class="meta">Last run: <strong>${relativeTime(latest.timestamp)}</strong> · ${formatTimestamp(latest.timestamp)} · Duration: <strong>${formatDuration(latest.result.durationMs)}</strong> · Ingress: <strong>${latest.result.ingressStatusCode}</strong></div>`
@@ -54,7 +60,7 @@ function probeCard(name: string): string {
       : "";
 
   return `
-  <div class="card ${state.paused ? "card-paused" : latest?.result.ok === false ? "card-fail" : ""}">
+  <div class="card ${state.paused ? "card-paused" : state.running ? "card-running" : latest?.result.ok === false ? "card-fail" : ""}">
     <div class="card-header">
       <div class="card-title">
         <code>${name}</code>
@@ -63,6 +69,7 @@ function probeCard(name: string): string {
       <div class="card-actions">${runBtn}${pauseBtn}</div>
     </div>
     ${failMsg}
+    ${runningInfo}
     ${lastRunInfo}
     <div class="history-label">Last ${state.history.length} runs:</div>
     <div class="history-dots">${historyDots || '<span class="meta">—</span>'}</div>
@@ -91,6 +98,7 @@ export function renderDashboard(): string {
     .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 0.75rem; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
     .card-paused { border-color: #744210; background: #1a1a0e; }
     .card-fail { border-color: #742a2a; background: #1a0e0e; }
+    .card-running { border-color: #2b6cb0; background: #0d1a2e; }
     .card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
     .card-actions { display: flex; gap: 0.5rem; align-items: center; }
     .card-title { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
@@ -98,10 +106,13 @@ export function renderDashboard(): string {
     .badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 0.25rem; letter-spacing: 0.05em; }
     .badge-ok { background: #1c4532; color: #68d391; }
     .badge-fail { background: #742a2a; color: #fc8181; }
+    .badge-running { background: #1a365d; color: #90cdf4; animation: pulse 1.5s ease-in-out infinite; }
     .badge-paused { background: #744210; color: #f6ad55; }
     .badge-unknown { background: #2d3748; color: #a0aec0; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
     .meta { font-size: 0.8rem; color: #718096; margin-bottom: 0.5rem; }
     .fail-msg { font-size: 0.8rem; color: #fc8181; background: #2d1515; border-radius: 0.25rem; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
+    .running-msg { font-size: 0.8rem; color: #90cdf4; background: #0d1e35; border-radius: 0.25rem; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
     .history-label { font-size: 0.7rem; color: #4a5568; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
     .history-dots { display: flex; gap: 3px; flex-wrap: wrap; }
     .dot { width: 10px; height: 10px; border-radius: 2px; cursor: default; }

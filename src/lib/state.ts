@@ -7,6 +7,8 @@ export interface ProbeRun {
 
 export interface ProbeState {
   paused: boolean;
+  running: boolean;
+  runStartedAt?: number; // unix ms, set when running
   history: ProbeRun[]; // newest first, capped at MAX_HISTORY
 }
 
@@ -16,7 +18,7 @@ const probeStates = new Map<string, ProbeState>();
 
 function getOrCreate(name: string): ProbeState {
   if (!probeStates.has(name)) {
-    probeStates.set(name, { paused: false, history: [] });
+    probeStates.set(name, { paused: false, running: false, history: [] });
   }
   return probeStates.get(name)!;
 }
@@ -31,10 +33,18 @@ export function setPaused(name: string, paused: boolean): void {
 
 export function recordRun(name: string, result: ProbeResult): void {
   const state = getOrCreate(name);
+  state.running = false;
+  state.runStartedAt = undefined;
   state.history.unshift({ timestamp: Date.now(), result });
   if (state.history.length > MAX_HISTORY) {
     state.history.length = MAX_HISTORY;
   }
+}
+
+export function setRunning(name: string, running: boolean): void {
+  const state = getOrCreate(name);
+  state.running = running;
+  state.runStartedAt = running ? Date.now() : undefined;
 }
 
 export function getProbeState(name: string): ProbeState {

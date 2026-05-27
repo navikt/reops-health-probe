@@ -65,11 +65,40 @@ deno task check
 
 ## Deployment
 
-Docker image built from `Dockerfile`. Uses GCP Workload Identity for BigQuery access — no service account keys needed.
+Docker image built from `Dockerfile`. BigQuery access uses a service account key stored as a NAIS secret.
 
 ```bash
 docker build -t reops-health-probe .
 docker run --env-file .env reops-health-probe
+```
+
+## GCP service account setup
+
+> TODO: move to Terraform
+
+BigQuery access is handled via a service account key injected as `GOOGLE_APPLICATION_CREDENTIALS_JSON` in the NAIS secret `reops-health-probe`.
+
+```bash
+# Create the service account
+gcloud iam service-accounts create reops-health-probe \
+  --project=team-researchops-dev-4396 \
+  --display-name="reops-health-probe"
+
+# Grant read access to BQ tables
+gcloud projects add-iam-policy-binding team-researchops-dev-4396 \
+  --member="serviceAccount:reops-health-probe@team-researchops-dev-4396.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataViewer" \
+  --condition=None
+
+# Grant permission to run BQ jobs (required for queries)
+gcloud projects add-iam-policy-binding team-researchops-dev-4396 \
+  --member="serviceAccount:reops-health-probe@team-researchops-dev-4396.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser" \
+  --condition=None
+
+# Download key — store the contents as GOOGLE_APPLICATION_CREDENTIALS_JSON in the NAIS secret
+gcloud iam service-accounts keys create reops-health-probe-key.json \
+  --iam-account=reops-health-probe@team-researchops-dev-4396.iam.gserviceaccount.com
 ```
 
 ## Adding a probe

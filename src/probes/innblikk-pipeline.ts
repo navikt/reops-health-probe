@@ -3,7 +3,7 @@ import type { Probe, ProbeResult } from "../lib/runner.ts";
 
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
-const BQ_PROJECT = "team-researchops-prod-01d6";
+const BQ_PROJECT = "team-researchops-dev-4396";
 const BQ_DATASET = "custom_umami_views";
 const BQ_VIEW = "custom_umami_view_event_data";
 

@@ -1,5 +1,5 @@
 import { recordProbe } from "./metrics.ts";
-import { isPaused, recordRun } from "./state.ts";
+import { isPaused, recordRun, setRunning } from "./state.ts";
 import { slackAlert } from "./slack.ts";
 
 export interface ProbeResult {
@@ -24,6 +24,7 @@ export async function runProbe(probe: Probe): Promise<void> {
 
   console.log(`[runner] running probe: ${probe.name}`);
 
+  setRunning(probe.name, true);
   let result: ProbeResult;
   try {
     result = await probe.run();
