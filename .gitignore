@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+!public/.gitkeep

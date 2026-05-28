@@ -1,7 +1,7 @@
-import { fetchWithRetry } from "../lib/fetch.ts";
-import { bqQuery } from "../lib/bigquery.ts";
-import { log, logError } from "../lib/log.ts";
-import type { Probe, ProbeContext, ProbeResult } from "../lib/runner.ts";
+import { fetchWithRetry } from "../lib/fetch";
+import { bqQuery } from "../lib/bigquery";
+import { log, logError } from "../lib/log";
+import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 
 const WAIT_MS = 5 * 60 * 1000;
 

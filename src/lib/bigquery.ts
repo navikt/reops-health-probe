@@ -1,4 +1,4 @@
-import { fetchWithRetry } from "./fetch.ts";
+import { fetchWithRetry } from "./fetch";
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
@@ -61,7 +61,7 @@ async function getAccessTokenFromServiceAccountKey(keyJson: string): Promise<str
 }
 
 async function getAccessToken(): Promise<string> {
-  const keyJson = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS_JSON");
+  const keyJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (keyJson) {
     return getAccessTokenFromServiceAccountKey(keyJson);
   }

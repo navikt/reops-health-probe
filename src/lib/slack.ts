@@ -1,7 +1,7 @@
-import { log, logError } from "./log.ts";
+import { log, logError } from "./log";
 
-const webhookUrl = Deno.env.get("SLACK_WEBHOOK_URL") ?? "";
-const environment = Deno.env.get("ENVIRONMENT") ?? "unknown";
+const webhookUrl = process.env.SLACK_WEBHOOK_URL ?? "";
+const environment = process.env.ENVIRONMENT ?? "unknown";
 const PROBE_UI_URL = "https://reops-health-probe.intern.dev.nav.no/";
 
 /**

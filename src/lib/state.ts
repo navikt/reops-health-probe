@@ -1,4 +1,4 @@
-import type { ProbeResult } from "./runner.ts";
+import type { ProbeResult } from "./runner";
 
 export interface ProbeRun {
   timestamp: number; // unix ms
@@ -17,12 +17,26 @@ export interface ProbeState {
 }
 
 const MAX_HISTORY = 1000;
-let nextRunId = 0;
 
-const probeStates = new Map<string, ProbeState>();
-const probeSchedules = new Map<string, number>(); // intervalMs
-/** AbortControllers for in-flight runs, keyed by runId. */
-const runControllers = new Map<number, AbortController>();
+// Anchor mutable state to globalThis so all module instances in the same
+// Node.js process share one copy. Required because Next.js dev/RSC compiles
+// instrumentation.ts and route modules separately, giving each a fresh module
+// scope — without this the page would always see empty Maps.
+const g = globalThis as typeof globalThis & {
+  __probeStates?: Map<string, ProbeState>;
+  __probeSchedules?: Map<string, number>;
+  __runControllers?: Map<number, AbortController>;
+  __nextRunId?: number;
+};
+
+g.__probeStates ??= new Map();
+g.__probeSchedules ??= new Map();
+g.__runControllers ??= new Map();
+g.__nextRunId ??= 0;
+
+const probeStates: Map<string, ProbeState> = g.__probeStates;
+const probeSchedules: Map<string, number> = g.__probeSchedules;
+const runControllers: Map<number, AbortController> = g.__runControllers;
 
 function getOrCreate(name: string): ProbeState {
   if (!probeStates.has(name)) {
@@ -61,7 +75,7 @@ export function recordRun(
 }
 
 export function setRunning(name: string): { runId: number; signal: AbortSignal } {
-  const id = nextRunId++;
+  const id = g.__nextRunId!++;
   const controller = new AbortController();
   runControllers.set(id, controller);
   getOrCreate(name).activeRuns.push({ id, startedAt: Date.now() });

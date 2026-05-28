@@ -1,7 +1,7 @@
-import { recordProbe } from "./metrics.ts";
-import { isPaused, recordRun, setRunning } from "./state.ts";
-import { slackAlertFailing, slackAlertRecovered } from "./slack.ts";
-import { log, logError } from "./log.ts";
+import { recordProbe } from "./metrics";
+import { isPaused, recordRun, setRunning } from "./state";
+import { slackAlertFailing, slackAlertRecovered } from "./slack";
+import { log, logError } from "./log";
 
 export interface ProbeResult {
   ok: boolean;
