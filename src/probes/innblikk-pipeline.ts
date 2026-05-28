@@ -10,7 +10,7 @@ const isProd = ["prod", "production"].includes(
 );
 
 const INGRESS_URL = isProd
-  ? "https://reops-event-proxy.ekstern.nav.no"
+  ? "https://reops-event-proxy.nav.no"
   : "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = isProd
   ? "773df94f-7025-432b-a010-ffe1e9246e27"

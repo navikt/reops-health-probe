@@ -23,7 +23,7 @@ spec:
     outbound:
       external:
         - host: hooks.slack.com
-        - host: reops-event-proxy.ekstern.nav.no
+        - host: reops-event-proxy.nav.no
         - host: bigquery.googleapis.com
         - host: oauth2.googleapis.com
   envFrom:
