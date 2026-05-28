@@ -31,6 +31,10 @@ const server = Deno.serve({ port: 9091 }, (req) => {
 
   // GET /api/state
   if (req.method === "GET" && pathname === "/api/state") {
+    return new Response(renderStateJson(), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // GET /
   if (req.method === "GET" && pathname === "/") {
