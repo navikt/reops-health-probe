@@ -20,6 +20,8 @@ const MAX_HISTORY = 1000;
 let nextRunId = 0;
 
 const probeStates = new Map<string, ProbeState>();
+/** AbortControllers for in-flight runs, keyed by runId. */
+const runControllers = new Map<number, AbortController>();
 
 function getOrCreate(name: string): ProbeState {
   if (!probeStates.has(name)) {
@@ -33,7 +35,14 @@ export function isPaused(name: string): boolean {
 }
 
 export function setPaused(name: string, paused: boolean): void {
-  getOrCreate(name).paused = paused;
+  const state = getOrCreate(name);
+  state.paused = paused;
+  if (paused) {
+    // Abort all in-flight runs for this probe so they stop mid-execution.
+    for (const run of state.activeRuns) {
+      runControllers.get(run.id)?.abort();
+    }
+  }
 }
 
 export function recordRun(
@@ -43,16 +52,19 @@ export function recordRun(
 ): void {
   const state = getOrCreate(name);
   state.activeRuns = state.activeRuns.filter((r) => r.id !== runId);
+  runControllers.delete(runId);
   state.history.unshift({ timestamp: Date.now(), result });
   if (state.history.length > MAX_HISTORY) {
     state.history.length = MAX_HISTORY;
   }
 }
 
-export function setRunning(name: string): number {
+export function setRunning(name: string): { runId: number; signal: AbortSignal } {
   const id = nextRunId++;
+  const controller = new AbortController();
+  runControllers.set(id, controller);
   getOrCreate(name).activeRuns.push({ id, startedAt: Date.now() });
-  return id;
+  return { runId: id, signal: controller.signal };
 }
 
 export function getProbeState(name: string): ProbeState {

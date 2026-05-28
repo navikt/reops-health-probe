@@ -51,28 +51,35 @@ function probeCard(name: string): string {
     .slice()
     .reverse()
     .map((run) => {
-      const status = run.result.ok ? "OK" : (run.result.message ?? "failed");
-      return `<span class="dot ${run.result.ok ? "dot-ok" : "dot-fail"}" tabindex="0" role="button"
-        data-tip-status="${escapeHtml(run.result.ok ? "OK" : "FAILED")}"
-        data-tip-time="${escapeHtml(formatTimestamp(run.timestamp))}"
-        data-tip-duration="${escapeHtml(formatDuration(run.result.durationMs))}"
-        data-tip-msg="${run.result.ok ? "" : escapeHtml(status)}"
-        data-tip-error-details="${run.result.errorDetails ? escapeHtml(run.result.errorDetails) : ""}"
-        data-tip-probe-id="${run.result.probeId ? escapeHtml(run.result.probeId) : ""}"
-      ></span>`;
+      const tip = JSON.stringify({
+        status: run.result.ok ? "OK" : "FAILED",
+        startedAt: run.timestamp,
+        durationMs: run.result.durationMs,
+        probeId: run.result.probeId ?? "",
+        msg: run.result.ok ? "" : (run.result.message ?? ""),
+        errorDetails: run.result.errorDetails ?? "",
+        ingressDetails: run.result.ingressDetails ?? "",
+        bqDetails: run.result.bqDetails ?? "",
+      });
+      return `<span class="dot ${run.result.ok ? "dot-ok" : "dot-fail"}" tabindex="0" role="button" data-tip="${escapeHtml(tip)}"></span>`;
     })
     .join("");
 
   const now = Date.now();
   const runningDots = state.activeRuns
-    .map(
-      (r) => `<span class="dot dot-running" tabindex="0" role="status"
-        data-tip-status="IN PROGRESS"
-        data-tip-time="${escapeHtml(formatTimestamp(r.startedAt))}"
-        data-tip-duration="${escapeHtml(formatDuration(now - r.startedAt))} elapsed"
-        data-tip-msg=""
-      ></span>`,
-    )
+    .map((r) => {
+      const tip = JSON.stringify({
+        status: "IN PROGRESS",
+        startedAt: r.startedAt,
+        durationMs: null,
+        probeId: "",
+        msg: "",
+        errorDetails: "",
+        ingressDetails: "",
+        bqDetails: "",
+      });
+      return `<span class="dot dot-running" tabindex="0" role="status" data-tip="${escapeHtml(tip)}"></span>`;
+    })
     .join("");
 
   const historyDots = completedDots + runningDots;
@@ -133,6 +140,8 @@ export function renderStateJson(): string {
         message: run.result.message ?? null,
         errorDetails: run.result.errorDetails ?? null,
         probeId: run.result.probeId ?? null,
+        ingressDetails: run.result.ingressDetails ?? null,
+        bqDetails: run.result.bqDetails ?? null,
         durationMs: run.result.durationMs,
         ingressStatusCode: run.result.ingressStatusCode,
       })),
@@ -143,6 +152,8 @@ export function renderStateJson(): string {
             message: latest.result.message ?? null,
             errorDetails: latest.result.errorDetails ?? null,
             probeId: latest.result.probeId ?? null,
+            ingressDetails: latest.result.ingressDetails ?? null,
+            bqDetails: latest.result.bqDetails ?? null,
             durationMs: latest.result.durationMs,
             ingressStatusCode: latest.result.ingressStatusCode,
           }
@@ -158,7 +169,7 @@ export function renderDashboard(): string {
     names.length > 0
       ? names.map(probeCard).join("\n")
       : `<p class="meta">No probes registered yet.</p>`;
-  const runningCount = names.filter((n) => getProbeState(n).running).length;
+  const runningCount = names.filter((n) => getProbeState(n).activeRuns.length > 0).length;
 
   const sha = Deno.env.get("GIT_SHA") ?? "unknown";
   const shortSha = sha === "unknown" ? "unknown" : sha.slice(0, 7);
@@ -166,6 +177,19 @@ export function renderDashboard(): string {
     sha === "unknown"
       ? `<span>build unknown</span>`
       : `<a href="https://github.com/navikt/reops-health-probe/commit/${sha}" target="_blank" rel="noopener">${shortSha}</a>`;
+
+  const env = (Deno.env.get("ENVIRONMENT") ?? "").toLowerCase();
+  const envDisplay = env === "prod" || env === "production"
+    ? { label: "PROD", cls: "env-chip-prod", dot: "🔴" }
+    : env === "dev" || env === "development"
+    ? { label: "DEV", cls: "env-chip-dev", dot: "🟡" }
+    : env
+    ? { label: env.toUpperCase(), cls: "env-chip-unknown", dot: "⚪" }
+    : null;
+  const envChipHtml = envDisplay
+    ? `<span class="env-chip ${envDisplay.cls}" title="Environment: ${envDisplay.label}">${envDisplay.dot} ${envDisplay.label}</span>`
+    : ``;
+
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -252,9 +276,13 @@ export function renderDashboard(): string {
     .dot-popover-status.running { color: #a0aec0; }
     .dot-popover-row { display: flex; justify-content: space-between; gap: 0.75rem; color: #a0aec0; }
     .dot-popover-row span:last-child { color: #e2e8f0; text-align: right; }
+    .dot-popover-row-muted span:last-child { color: #4a5568 !important; font-style: italic; }
     .dot-popover-msg { margin-top: 0.4rem; color: #fc8181; font-size: 0.7rem; word-break: break-word; }
     .dot-popover-probe-id { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.65rem; color: #a0aec0; word-break: break-all; }
     .dot-popover-details { margin-top: 0.5rem; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.68rem; color: #feb2b2; background: #1a0a0a; border: 1px solid #742a2a; border-radius: 0.25rem; padding: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+    .dot-popover-section-label { margin-top: 0.5rem; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; color: #718096; text-transform: uppercase; }
+    .dot-popover-bq { color: #90cdf4; background: #0d1a2e; border-color: #2b6cb0; }
+    .dot-popover-ingress { color: #fbd38d; background: #1a130a; border-color: #975a16; }
     .btn { border: none; border-radius: 0.375rem; padding: 0.35rem 0.85rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
     .btn-run { background: #1a3a5c; color: #63b3ed; }
     .btn-run:hover { background: #2a5a8c; }
@@ -263,12 +291,17 @@ export function renderDashboard(): string {
     .btn-resume { background: #1c4532; color: #68d391; }
     .btn-resume:hover { background: #276749; }
     .refresh-note { font-size: 0.75rem; color: #4a5568; margin-top: 2rem; }
+    .env-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.7rem; border-radius: 999px; border: 1.5px solid; }
+    .env-chip-prod { background: #3b0a0a; color: #fc8181; border-color: #742a2a; }
+    .env-chip-dev { background: #2d2600; color: #f6e05e; border-color: #975a16; }
+    .env-chip-unknown { background: #1a1f2e; color: #718096; border-color: #4a5568; }
   </style>
 </head>
 <body>
   <h1>reops-health-probe</h1>
   <div class="header-row">
     <p class="subtitle">Pipeline health monitor</p>
+    ${envChipHtml}
     <span id="running-count" class="running-pill${runningCount > 0 ? "" : " hidden"}">${runningCount} running</span>
   </div>
   <nav>
@@ -288,21 +321,39 @@ export function renderDashboard(): string {
     let pinned = null;
     let hovered = null;
 
+    function renderTooltip(tip) {
+      const now = Date.now();
+      const statusCls = tip.status === 'OK' ? 'ok' : tip.status === 'IN PROGRESS' ? 'running' : 'fail';
+      const elapsed = tip.durationMs != null ? tip.durationMs : (now - tip.startedAt);
+      const durationLabel = tip.durationMs != null ? fmt(tip.durationMs) : fmt(now - tip.startedAt) + ' elapsed';
+
+      const rows = [
+        \`<div class="dot-popover-status \${statusCls}">\${tip.status}</div>\`,
+        \`<div class="dot-popover-row"><span>Started</span><span>\${fmtTs(tip.startedAt)}</span></div>\`,
+        \`<div class="dot-popover-row"><span>Duration</span><span>\${durationLabel}</span></div>\`,
+        tip.probeId
+          ? \`<div class="dot-popover-row"><span>Probe ID</span><span class="dot-popover-probe-id">\${tip.probeId}</span></div>\`
+          : \`<div class="dot-popover-row dot-popover-row-muted"><span>Probe ID</span><span>pending…</span></div>\`,
+      ];
+
+      if (tip.msg) rows.push(\`<div class="dot-popover-msg">\${tip.msg}</div>\`);
+      if (tip.errorDetails) rows.push(\`<pre class="dot-popover-details">\${tip.errorDetails}</pre>\`);
+      if (tip.ingressDetails) rows.push(
+        \`<div class="dot-popover-section-label">Ingress request + response</div>\`,
+        \`<pre class="dot-popover-details dot-popover-ingress">\${tip.ingressDetails}</pre>\`,
+      );
+      if (tip.bqDetails) rows.push(
+        \`<div class="dot-popover-section-label">BigQuery response</div>\`,
+        \`<pre class="dot-popover-details dot-popover-bq">\${tip.bqDetails}</pre>\`,
+      );
+
+      return rows.join('');
+    }
+
     function position(dot) {
-      const status = dot.dataset.tipStatus ?? '';
-      const time = dot.dataset.tipTime ?? '';
-      const duration = dot.dataset.tipDuration ?? '';
-      const msg = dot.dataset.tipMsg ?? '';
-      const errorDetails = dot.dataset.tipErrorDetails ?? '';
-      const statusCls = status === 'OK' ? 'ok' : status === 'IN PROGRESS' ? 'running' : 'fail';
-      const msgHtml = msg ? \`<div class="dot-popover-msg">\${msg}</div>\` : '';
-      const detailsHtml = errorDetails ? \`<pre class="dot-popover-details">\${errorDetails}</pre>\` : '';
-      tooltip.innerHTML = \`
-        <div class="dot-popover-status \${statusCls}">\${status}</div>
-        <div class="dot-popover-row"><span>Time</span><span>\${time}</span></div>
-        <div class="dot-popover-row"><span>Duration</span><span>\${duration || '—'}</span></div>
-        \${msgHtml}\${detailsHtml}
-      \`.trim();
+      let tip;
+      try { tip = JSON.parse(dot.dataset.tip ?? '{}'); } catch { tip = {}; }
+      tooltip.innerHTML = renderTooltip(tip);
       tooltip.classList.add('is-visible');
       computePosition(dot, tooltip, {
         placement: 'top',
@@ -327,7 +378,7 @@ export function renderDashboard(): string {
       });
     }
 
-    document.querySelectorAll('.dot[data-tip-status]').forEach(bindDot);
+    document.querySelectorAll('.dot[data-tip]').forEach(bindDot);
     document.addEventListener('click', () => hideTooltip());
     tooltip.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTooltip(); });
@@ -355,25 +406,35 @@ export function renderDashboard(): string {
       s.className = 'dot ' + (run.ok ? 'dot-ok' : 'dot-fail');
       s.tabIndex = 0;
       s.setAttribute('role', 'button');
-      s.dataset.tipStatus = run.ok ? 'OK' : 'FAILED';
-      s.dataset.tipTime = fmtTs(run.timestamp);
-      s.dataset.tipDuration = fmt(run.durationMs);
-      s.dataset.tipMsg = run.ok ? '' : (run.message ?? '');
-      s.dataset.tipErrorDetails = run.ok ? '' : (run.errorDetails ?? '');
-      s.dataset.tipProbeId = run.probeId ?? '';
+      s.dataset.tip = JSON.stringify({
+        status: run.ok ? 'OK' : 'FAILED',
+        startedAt: run.timestamp,
+        durationMs: run.durationMs,
+        probeId: run.probeId ?? '',
+        msg: run.ok ? '' : (run.message ?? ''),
+        errorDetails: run.ok ? '' : (run.errorDetails ?? ''),
+        ingressDetails: run.ingressDetails ?? '',
+        bqDetails: run.bqDetails ?? '',
+      });
       bindDot(s);
       return s;
     }
 
-    function makeRunningDot(runStartedAt, now) {
+    function makeRunningDot(startedAt) {
       const s = document.createElement('span');
       s.className = 'dot dot-running';
       s.tabIndex = 0;
       s.setAttribute('role', 'status');
-      s.dataset.tipStatus = 'IN PROGRESS';
-      s.dataset.tipTime = fmtTs(runStartedAt);
-      s.dataset.tipDuration = fmt(now - runStartedAt) + ' elapsed';
-      s.dataset.tipMsg = '';
+      s.dataset.tip = JSON.stringify({
+        status: 'IN PROGRESS',
+        startedAt,
+        durationMs: null,
+        probeId: '',
+        msg: '',
+        errorDetails: '',
+        ingressDetails: '',
+        bqDetails: '',
+      });
       bindDot(s);
       return s;
     }
@@ -443,9 +504,12 @@ export function renderDashboard(): string {
           const existingRunning = [...dotsEl.querySelectorAll('.dot-running')];
           for (let i = 0; i < activeRuns.length; i++) {
             if (existingRunning[i]) {
-              existingRunning[i].dataset.tipDuration = fmt(now - activeRuns[i].startedAt) + ' elapsed';
+              // Update startedAt in the JSON so renderTooltip recomputes elapsed correctly
+              const tip = JSON.parse(existingRunning[i].dataset.tip ?? '{}');
+              tip.startedAt = activeRuns[i].startedAt;
+              existingRunning[i].dataset.tip = JSON.stringify(tip);
             } else {
-              dotsEl.appendChild(makeRunningDot(activeRuns[i].startedAt, now));
+              dotsEl.appendChild(makeRunningDot(activeRuns[i].startedAt));
             }
           }
           for (let i = activeRuns.length; i < existingRunning.length; i++) {
@@ -487,13 +551,12 @@ export function renderDashboard(): string {
 
     // ── Live popover ticker ────────────────────────────────────────────────────
     // Refreshes the open popover every second so elapsed time stays current.
-    // Only recomputes — no fetch needed.
     setInterval(() => {
       const dot = pinned ?? hovered;
       if (!dot || !tooltip.classList.contains('is-visible')) return;
-      if (dot.dataset.tipStatus !== 'IN PROGRESS') return;
-      const startedAt = new Date(dot.dataset.tipTime).getTime();
-      dot.dataset.tipDuration = fmt(Date.now() - startedAt) + ' elapsed';
+      let tip;
+      try { tip = JSON.parse(dot.dataset.tip ?? '{}'); } catch { return; }
+      if (tip.status !== 'IN PROGRESS') return;
       position(dot);
     }, 1_000);
 

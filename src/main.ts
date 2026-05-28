@@ -1,7 +1,7 @@
 import "@std/dotenv/load";
 import { log } from "./lib/log.ts";
 import { renderMetrics } from "./lib/metrics.ts";
-import { runProbe } from "./lib/runner.ts";
+import { runProbe, startProbe } from "./lib/runner.ts";
 import { registerProbe, setPaused } from "./lib/state.ts";
 import { renderDashboard, renderDocs, renderStateJson } from "./lib/ui.ts";
 import { innblikkPipelineProbe } from "./probes/innblikk-pipeline.ts";
@@ -10,14 +10,7 @@ const probes = [innblikkPipelineProbe];
 
 for (const probe of probes) {
   registerProbe(probe.name);
-  if (probe.intervalMs != null) {
-    // setInterval fires unconditionally — concurrent in-flight runs accumulate.
-    // Use this when the schedule interval is shorter than the probe run duration.
-    setInterval(() => runProbe(probe), probe.intervalMs);
-  } else {
-    // Deno.cron skips ticks that overlap with a still-running invocation.
-    Deno.cron(`probe-${probe.name}`, probe.schedule, () => runProbe(probe));
-  }
+  startProbe(probe);
 }
 
 // Run all probes once on startup so metrics are populated immediately

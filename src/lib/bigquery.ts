@@ -1,3 +1,5 @@
+import { fetchWithRetry } from "./fetch.ts";
+
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 async function getAccessTokenFromServiceAccountKey(keyJson: string): Promise<string> {
@@ -43,13 +45,16 @@ async function getAccessTokenFromServiceAccountKey(keyJson: string): Promise<str
 
   const jwt = `${signingInput}.${sig}`;
 
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+  const tokenRes = await fetchWithRetry({
+    url: "https://oauth2.googleapis.com/token",
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
   });
-  if (!tokenRes.ok) throw new Error(`SA key token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
-  const { access_token } = await tokenRes.json();
+  if (tokenRes.statusCode < 200 || tokenRes.statusCode >= 300) {
+    throw new Error(`SA key token exchange failed: ${tokenRes.statusCode} ${tokenRes.body}`);
+  }
+  const { access_token } = JSON.parse(tokenRes.body);
   // Cache for 55 minutes (tokens last 1hr, refresh 5min early)
   cachedToken = { value: access_token as string, expiresAt: Date.now() + 55 * 60 * 1000 };
   return cachedToken.value;
@@ -62,19 +67,26 @@ async function getAccessToken(): Promise<string> {
   }
 
   // Fall back to GCP metadata server (Workload Identity / local GCP environment)
-  const res = await fetch(
-    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-    { headers: { "Metadata-Flavor": "Google" } },
-  );
-  if (!res.ok) throw new Error(`GCP metadata token fetch failed: ${res.status}`);
-  const { access_token } = await res.json();
+  const res = await fetchWithRetry({
+    url: "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    method: "GET",
+    headers: { "Metadata-Flavor": "Google" },
+  });
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw new Error(`GCP metadata token fetch failed: ${res.statusCode}`);
+  }
+  const { access_token } = JSON.parse(res.body);
   return access_token as string;
 }
 
 export interface BQQueryResult {
-  // BQ REST response: rows[n].f[m].v
   rows: { f: { v: string }[] }[];
   totalRows: number;
+  /**
+   * Full request+response summary — for the UI tooltip.
+   * Authorization header value is redacted.
+   */
+  requestSummary: string;
 }
 
 export async function bqQuery(
@@ -96,22 +108,25 @@ export async function bqQuery(
     })),
   };
 
-  const res = await fetch(url, {
+  const result = await fetchWithRetry({
+    url,
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    redactHeaders: ["Authorization"],
   });
 
-  if (!res.ok) {
-    throw new Error(`BigQuery query failed: ${res.status} ${await res.text()}`);
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw new Error(`BigQuery query failed: ${result.statusCode} ${result.body}`);
   }
 
-  const data = await res.json();
+  const data = JSON.parse(result.body);
   return {
     rows: (data.rows ?? []) as { f: { v: string }[] }[],
     totalRows: parseInt(data.totalRows ?? "0", 10),
+    requestSummary: result.requestSummary,
   };
 }
