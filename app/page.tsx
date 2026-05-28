@@ -29,7 +29,7 @@ export default function DashboardPage() {
     const initialState: ProbeStateData = {
       paused: serverState.paused,
       running: serverState.activeRuns.length > 0,
-      activeRuns: serverState.activeRuns.map((r) => ({ startedAt: r.startedAt })),
+      activeRuns: serverState.activeRuns.map((r) => ({ startedAt: r.startedAt, probeId: r.probeId })),
       now,
       history: serverState.history.map((run) => ({
         timestamp: run.timestamp,
@@ -39,6 +39,7 @@ export default function DashboardPage() {
         probeId: run.result.probeId ?? null,
         ingressDetails: run.result.ingressDetails ?? null,
         bqDetails: run.result.bqDetails ?? null,
+        bqQuery: run.result.bqQuery ?? null,
         durationMs: run.result.durationMs,
       })),
       latest: latest
@@ -50,6 +51,7 @@ export default function DashboardPage() {
             probeId: latest.result.probeId ?? null,
             ingressDetails: latest.result.ingressDetails ?? null,
             bqDetails: latest.result.bqDetails ?? null,
+            bqQuery: latest.result.bqQuery ?? null,
             durationMs: latest.result.durationMs,
           }
         : null,

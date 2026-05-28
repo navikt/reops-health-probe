@@ -1,0 +1,33 @@
+apiVersion: nais.io/v1alpha1
+kind: Application
+metadata:
+  name: reops-health-probe
+  namespace: team-researchops
+  labels:
+    team: team-researchops
+spec:
+  image: "{{ image }}"
+  ingresses:
+    - https://reops-health-probe.ansatt.nav.no
+  port: 9091
+  replicas:
+    min: 1
+    max: 1
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: "50m"
+      memory: 128Mi
+  accessPolicy:
+    outbound:
+      external:
+        - host: hooks.slack.com
+        - host: reops-event-proxy.ekstern.nav.no
+        - host: bigquery.googleapis.com
+        - host: oauth2.googleapis.com
+  envFrom:
+    - secret: reops-health-probe
+  env:
+    - name: ENVIRONMENT
+      value: production

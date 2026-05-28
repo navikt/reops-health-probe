@@ -2,7 +2,14 @@ import { log, logError } from "./log";
 
 const webhookUrl = process.env.SLACK_WEBHOOK_URL ?? "";
 const environment = process.env.ENVIRONMENT ?? "unknown";
-const PROBE_UI_URL = "https://reops-health-probe.intern.dev.nav.no/";
+const isProd = ["prod", "production"].includes(environment.toLowerCase());
+const PROBE_UI_URL = isProd
+  ? "https://reops-health-probe.ansatt.nav.no/"
+  : "https://reops-health-probe.ansatt.dev.nav.no/";
+
+// ---------------------------------------------------------------------------
+// Throttle
+// ---------------------------------------------------------------------------
 
 /**
  * Throttle: track ok→fail transitions per probe within a rolling 1-hour window.
@@ -41,7 +48,6 @@ function recordFailureTransition(
   const now = Date.now();
   const state = getThrottle(probe);
 
-  // Prune old timestamps outside the window
   state.transitionTimestamps = state.transitionTimestamps.filter(
     (t) => now - t < THROTTLE_WINDOW_MS,
   );
@@ -62,6 +68,10 @@ function recordRecovery(probe: string): void {
     throttleNoticeSent: false,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function envLabel(): string {
   const e = environment.toLowerCase();
@@ -96,10 +106,109 @@ async function postToSlack(payload: unknown): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Alert template
+// ---------------------------------------------------------------------------
+
+type AlertType = "failing" | "recovered" | "throttled";
+
+interface AlertData {
+  type: AlertType;
+  probe: string;
+  /** Body message. For "failing": the error detail. For "throttled": omit — derived internally. */
+  message?: string;
+  /** Throttled only — human-readable time when alerts resume. */
+  resumesAt?: string;
+  /** When true, marks the message as a test. Default false. */
+  isTest?: boolean;
+}
+
+const ALERT_CONFIG: Record<
+  AlertType,
+  { emoji: string; color: string; title: string; defaultMessage: string }
+> = {
+  failing: {
+    emoji: "🔴",
+    color: "danger",
+    title: "Health probe failing",
+    defaultMessage: "Simulated failure — sent from the test dashboard.",
+  },
+  recovered: {
+    emoji: "✅",
+    color: "good",
+    title: "Health probe recovered",
+    defaultMessage: "",
+  },
+  throttled: {
+    emoji: "⏸️",
+    color: "warning",
+    title: "Alert throttled",
+    defaultMessage: "",
+  },
+};
+
+function buildAlertPayload(data: AlertData): unknown {
+  const { type, probe, isTest = false, resumesAt } = data;
+  const cfg = ALERT_CONFIG[type];
+
+  const testBadge = isTest ? " · Test" : "";
+  const headerText = `${cfg.emoji} ${cfg.title}${testBadge}`;
+  const fallbackText = `${cfg.emoji} *${probe}* — ${cfg.title}${testBadge} (${envLabel()})`;
+
+  let bodyText: string;
+  if (type === "throttled") {
+    bodyText =
+      `*${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\n` +
+      `We know it's failing. Check the dashboard and look into it.` +
+      (resumesAt ? ` Alerts will resume after *${resumesAt}*.` : "");
+  } else if (type === "recovered") {
+    bodyText = `*${probe}* is back to healthy.`;
+  } else {
+    bodyText = data.message ?? cfg.defaultMessage;
+  }
+
+  const blocks: unknown[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: headerText, emoji: true },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Probe*\n${probe}` },
+        { type: "mrkdwn", text: `*Environment*\n${envLabel()}` },
+      ],
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: bodyText },
+    },
+    { type: "divider" },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `<${PROBE_UI_URL}|Open probe dashboard>`,
+        },
+      ],
+    },
+  ];
+
+  return {
+    text: fallbackText,
+    attachments: [{ color: cfg.color, blocks }],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 export async function slackAlertFailing(
   probe: string,
   message: string,
-  { bypassThrottle = false }: { bypassThrottle?: boolean } = {},
+  { bypassThrottle = false, isTest = false }: { bypassThrottle?: boolean; isTest?: boolean } = {},
 ): Promise<void> {
   const decision = bypassThrottle ? "send" : recordFailureTransition(probe);
 
@@ -109,172 +218,40 @@ export async function slackAlertFailing(
   }
 
   if (decision === "throttled") {
-    getThrottle(probe).throttleNoticeSent = true;
-    const nextAlertAt = new Date(
+    const state = getThrottle(probe);
+    state.throttleNoticeSent = true;
+    const resumesAt = new Date(
       Date.now() + THROTTLE_WINDOW_MS,
     ).toLocaleTimeString("no-NO", {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: "Europe/Oslo",
     });
-    await postToSlack({
-      text: `⏸️ Alert throttled for *${probe}* (${envLabel()}) — too many transitions in 1 hour`,
-      attachments: [
-        {
-          color: "warning",
-          blocks: [
-            {
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: `⏸️ *Alert throttled* — *${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\nWe know it's failing. Check the dashboard and look into it. Alerts will resume after *${nextAlertAt}*.`,
-              },
-            },
-            {
-              type: "context",
-              elements: [
-                {
-                  type: "mrkdwn",
-                  text: `*${envLabel()}* environment  ·  <${PROBE_UI_URL}|See probe dashboard & pause if needed>`,
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
+    await postToSlack(buildAlertPayload({ type: "throttled", probe, resumesAt, isTest }));
     return;
   }
 
-  // Normal failure alert
-  await postToSlack({
-    text: `🔴 *${probe}* probe failing (${envLabel()})`,
-    attachments: [
-      {
-        color: "danger",
-        blocks: [
-          {
-            type: "header",
-            text: {
-              type: "plain_text",
-              text: `🔴 Health probe failing`,
-              emoji: true,
-            },
-          },
-          {
-            type: "section",
-            fields: [
-              {
-                type: "mrkdwn",
-                text: `*Probe*\n${probe}`,
-              },
-              {
-                type: "mrkdwn",
-                text: `*Environment*\n${envLabel()}`,
-              },
-            ],
-          },
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `*Error*\n${message}`,
-            },
-          },
-          {
-            type: "divider",
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `<${PROBE_UI_URL}|See probe details & pause health check>`,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
+  await postToSlack(buildAlertPayload({ type: "failing", probe, message, isTest }));
 }
 
-export async function slackAlertThrottleTest(probe: string): Promise<void> {
-  const nextAlertAt = new Date(
+export async function slackAlertRecovered(
+  probe: string,
+  { isTest = false }: { isTest?: boolean } = {},
+): Promise<void> {
+  recordRecovery(probe);
+  await postToSlack(buildAlertPayload({ type: "recovered", probe, isTest }));
+}
+
+export async function slackAlertThrottled(
+  probe: string,
+  { isTest = false }: { isTest?: boolean } = {},
+): Promise<void> {
+  const resumesAt = new Date(
     Date.now() + THROTTLE_WINDOW_MS,
   ).toLocaleTimeString("no-NO", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Oslo",
   });
-  await postToSlack({
-    text: `⏸️ [TEST] Alert throttled for *${probe}* (${envLabel()})`,
-    attachments: [
-      {
-        color: "warning",
-        blocks: [
-          {
-            type: "section",
-            text: {
-              type: "mrkdwn",
-              text: `⏸️ *Alert throttled* _(test message)_ — *${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\nWe know it's failing. Check the dashboard and look into it. Alerts will resume after *${nextAlertAt}*.`,
-            },
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `*${envLabel()}* environment  ·  <${PROBE_UI_URL}|See probe dashboard & pause if needed>`,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
-}
-
-export async function slackAlertRecovered(probe: string): Promise<void> {
-  recordRecovery(probe);
-  await postToSlack({
-    text: `✅ *${probe}* probe recovered (${envLabel()})`,
-    attachments: [
-      {
-        color: "good",
-        blocks: [
-          {
-            type: "header",
-            text: {
-              type: "plain_text",
-              text: `✅ Health probe recovered`,
-              emoji: true,
-            },
-          },
-          {
-            type: "section",
-            fields: [
-              {
-                type: "mrkdwn",
-                text: `*Probe*\n${probe}`,
-              },
-              {
-                type: "mrkdwn",
-                text: `*Environment*\n${envLabel()}`,
-              },
-            ],
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `<${PROBE_UI_URL}|View probe dashboard>`,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
+  await postToSlack(buildAlertPayload({ type: "throttled", probe, resumesAt, isTest }));
 }

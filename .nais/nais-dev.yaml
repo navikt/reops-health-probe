@@ -28,3 +28,6 @@ spec:
         - host: oauth2.googleapis.com
   envFrom:
     - secret: reops-health-probe
+  env:
+    - name: ENVIRONMENT
+      value: dev

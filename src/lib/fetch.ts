@@ -1,4 +1,5 @@
 const RETRY_DELAY_MS = 2_000;
+const MAX_ATTEMPTS = 2;
 
 export interface FetchResult {
   statusCode: number;
@@ -14,7 +15,7 @@ export interface FetchResult {
    *   { ... }
    */
   requestSummary: string;
-  /** True if the fetch was completed on a retry (attempt 2). */
+  /** True if the fetch succeeded on a retry (attempt > 1). */
   retried: boolean;
 }
 
@@ -33,7 +34,7 @@ export interface FetchRequest {
 }
 
 /**
- * Executes a fetch with one automatic retry on:
+ * Executes a fetch with up to `MAX_ATTEMPTS` attempts, retrying on:
  *   - Network error (fetch throws)
  *   - 5xx response
  *
@@ -45,7 +46,9 @@ export async function fetchWithRetry(req: FetchRequest): Promise<FetchResult> {
 
   const loggableHeaders: Record<string, string> = {};
   for (const [k, v] of Object.entries(req.headers)) {
-    loggableHeaders[k] = redact.has(k.toLowerCase()) ? `${v.slice(0, 8)}…[redacted]` : v;
+    loggableHeaders[k] = redact.has(k.toLowerCase())
+      ? `${v.slice(0, 8)}…[redacted]`
+      : v;
   }
 
   const reqLines = [
@@ -63,11 +66,18 @@ export async function fetchWithRetry(req: FetchRequest): Promise<FetchResult> {
 
   let lastError: string | null = null;
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    if (attempt === 2) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
       await new Promise<void>((r, reject) => {
         const t = setTimeout(r, RETRY_DELAY_MS);
-        req.signal?.addEventListener("abort", () => { clearTimeout(t); reject(req.signal!.reason); }, { once: true });
+        req.signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            reject(req.signal!.reason);
+          },
+          { once: true },
+        );
       });
     }
 
@@ -85,29 +95,51 @@ export async function fetchWithRetry(req: FetchRequest): Promise<FetchResult> {
       body = await res.text();
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      if (attempt < 2) continue;
-      // Both attempts threw — synthesize a 0 status
-      const summary = buildSummary(reqSummary, attempt, 0, `Network error: ${lastError}`);
-      return { statusCode: 0, body: `Network error: ${lastError}`, requestSummary: summary, retried: attempt === 2 };
+      if (attempt < MAX_ATTEMPTS) continue;
+      const summary = buildSummary(
+        reqSummary,
+        attempt,
+        MAX_ATTEMPTS,
+        0,
+        `Network error: ${lastError}`,
+      );
+      return {
+        statusCode: 0,
+        body: `Network error: ${lastError}`,
+        requestSummary: summary,
+        retried: attempt > 1,
+      };
     }
 
     // Retry on 5xx
-    if (statusCode >= 500 && attempt < 2) {
+    if (statusCode >= 500 && attempt < MAX_ATTEMPTS) {
       lastError = `HTTP ${statusCode}: ${body}`;
       continue;
     }
 
-    const summary = buildSummary(reqSummary, attempt, statusCode, body);
-    return { statusCode, body, requestSummary: summary, retried: attempt === 2 };
+    const summary = buildSummary(
+      reqSummary,
+      attempt,
+      MAX_ATTEMPTS,
+      statusCode,
+      body,
+    );
+    return { statusCode, body, requestSummary: summary, retried: attempt > 1 };
   }
 
   // Unreachable, but TypeScript needs it
   throw new Error("fetchWithRetry: unreachable");
 }
 
-function buildSummary(reqSummary: string, attempt: number, statusCode: number, body: string): string {
-  const attemptLabel = attempt > 1 ? `[attempt ${attempt}/2] ` : "";
-  // Pretty-print response body if JSON
+function buildSummary(
+  reqSummary: string,
+  attempt: number,
+  maxAttempts: number,
+  statusCode: number,
+  body: string,
+): string {
+  const attemptLabel =
+    attempt > 1 ? `[attempt ${attempt}/${maxAttempts}] ` : "";
   let prettyBody: string;
   try {
     prettyBody = JSON.stringify(JSON.parse(body), null, 2);

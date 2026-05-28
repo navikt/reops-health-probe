@@ -6,13 +6,14 @@ export interface RunData {
   probeId: string | null;
   ingressDetails: string | null;
   bqDetails: string | null;
+  bqQuery: string | null;
   durationMs: number;
 }
 
 export interface ProbeStateData {
   paused: boolean;
   running: boolean;
-  activeRuns: { startedAt: number }[];
+  activeRuns: { startedAt: number; probeId?: string }[];
   now: number;
   history: RunData[];
   latest: RunData | null;
@@ -27,4 +28,5 @@ export interface TipData {
   errorDetails: string;
   ingressDetails: string;
   bqDetails: string;
+  bqQuery: string;
 }

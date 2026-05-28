@@ -5,9 +5,17 @@ import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 
 const WAIT_MS = 5 * 60 * 1000;
 
-const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
+const isProd = ["prod", "production"].includes(
+  (process.env.ENVIRONMENT ?? "").toLowerCase(),
+);
+
+const INGRESS_URL = isProd
+  ? "https://reops-event-proxy.ekstern.nav.no"
+  : "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
-const BQ_PROJECT = "team-researchops-dev-4396";
+const BQ_PROJECT = isProd
+  ? "team-researchops-prod-01d6"
+  : "team-researchops-dev-4396";
 const BQ_DATASET = "custom_umami_views";
 const BQ_VIEW = "custom_umami_view_event_data";
 
@@ -15,13 +23,6 @@ const INGRESS_PAYLOAD = (probeId: string) => ({
   type: "event",
   payload: {
     website: WEBSITE_ID,
-    url: "/health-probe",
-    hostname: "reops-health-probe",
-    language: "en-US",
-    referrer: "",
-    screen: "1920x1080",
-    title: "Health Probe",
-    name: "health_probe",
     data: { probe_id: probeId },
   },
 });
@@ -43,7 +44,7 @@ async function sendProbeEvent(probeId: string, signal: AbortSignal) {
 async function checkBigQuery(
   probeId: string,
   sentAt: number,
-): Promise<{ found: boolean; requestSummary: string }> {
+): Promise<{ found: boolean; requestSummary: string; query: string }> {
   // Query the end-user-facing view (custom_umami_view_event_data) which reads from
   // event_data_transformed — populated by the scheduled query every 5 minutes.
   // event_parameters is a REPEATED RECORD; UNNEST to search within it.
@@ -66,14 +67,18 @@ async function checkBigQuery(
     { name: "probe_id", type: "STRING", value: probeId },
   ]);
   const cnt = parseInt(result.rows?.[0]?.f?.[0]?.v ?? "0", 10);
-  return { found: cnt > 0, requestSummary: result.requestSummary };
+  return {
+    found: cnt > 0,
+    requestSummary: result.requestSummary,
+    query: result.query,
+  };
 }
 
 export const innblikkPipelineProbe: Probe = {
   name: "innblikk-pipeline",
   schedule: { type: "interval", ms: 30_000 },
 
-  async run({ runId, signal }: ProbeContext): Promise<ProbeResult> {
+  async run({ runId, signal, setProbeId }: ProbeContext): Promise<ProbeResult> {
     const probeId = crypto.randomUUID();
     const start = Date.now();
 
@@ -96,6 +101,9 @@ export const innblikkPipelineProbe: Probe = {
         durationMs: Date.now() - start,
       };
     }
+
+    // Ingress accepted — probeId is now known, surface it on the running dot
+    setProbeId(probeId);
 
     log({
       event: "probe.sent",
@@ -134,6 +142,7 @@ export const innblikkPipelineProbe: Probe = {
         errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}`,
         ingressDetails: ingress.requestSummary,
         bqDetails: bq.requestSummary,
+        bqQuery: bq.query,
         durationMs,
       };
     }
@@ -150,6 +159,7 @@ export const innblikkPipelineProbe: Probe = {
       probeId,
       ingressDetails: ingress.requestSummary,
       bqDetails: bq.requestSummary,
+      bqQuery: bq.query,
       durationMs,
     };
   },

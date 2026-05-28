@@ -1,5 +1,5 @@
 import { probes } from "@/server";
-import { slackAlertFailing, slackAlertRecovered, slackAlertThrottleTest } from "@/src/lib/slack";
+import { slackAlertFailing, slackAlertRecovered, slackAlertThrottled } from "@/src/lib/slack";
 import { log } from "@/src/lib/log";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +21,11 @@ export async function POST(
   log({ event: "admin.test-alert", probe: name, type });
 
   if (type === "failure") {
-    await slackAlertFailing(name, "This is a simulated failure alert sent from the dashboard.", {
-      bypassThrottle: true,
-    });
+    await slackAlertFailing(name, "", { bypassThrottle: true, isTest: true });
   } else if (type === "recovery") {
-    await slackAlertRecovered(name);
+    await slackAlertRecovered(name, { isTest: true });
   } else {
-    await slackAlertThrottleTest(name);
+    await slackAlertThrottled(name, { isTest: true });
   }
 
   return Response.json({ ok: true });

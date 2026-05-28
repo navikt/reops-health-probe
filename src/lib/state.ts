@@ -8,6 +8,7 @@ export interface ProbeRun {
 export interface ActiveRun {
   id: number;
   startedAt: number; // unix ms
+  probeId?: string;
 }
 
 export interface ProbeState {
@@ -80,6 +81,12 @@ export function setRunning(name: string): { runId: number; signal: AbortSignal }
   runControllers.set(id, controller);
   getOrCreate(name).activeRuns.push({ id, startedAt: Date.now() });
   return { runId: id, signal: controller.signal };
+}
+
+/** Update mutable fields on an in-flight run (e.g. probeId once it's known). */
+export function updateActiveRun(name: string, runId: number, patch: Partial<Pick<ActiveRun, "probeId">>): void {
+  const run = getOrCreate(name).activeRuns.find((r) => r.id === runId);
+  if (run) Object.assign(run, patch);
 }
 
 export function getProbeState(name: string): ProbeState {

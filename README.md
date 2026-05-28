@@ -40,16 +40,12 @@ All metrics carry a `probe` label with the probe name.
 
 ## Configuration
 
-Only one environment variable is required — probe-specific config lives in the probe source itself.
+Only one environment variable is required — probe-specific config lives in the probe source itself. `ENVIRONMENT` is set via the NAIS manifest and does not need to be in the secret.
 
 ```bash
 # Slack alerting (required for alerts)
 # Webhook URL — manage at https://api.slack.com/apps/A0B69D3JSQN
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-
-# Environment label shown in Slack alerts and on the dashboard UI (optional, recommended)
-# Valid values: dev, development, prod, production — or any custom string
-ENVIRONMENT=dev
 ```
 
 Alerts use Slack Block Kit for rich formatting. Alerts fire only on state **transitions** (ok→fail, fail→ok). Failure alerts require 3 consecutive failures before firing. Throttle resets on recovery.

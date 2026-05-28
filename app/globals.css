@@ -266,11 +266,6 @@ nav {
   font-size: 0.7rem;
   word-break: break-word;
 }
-.dot-popover-probe-id {
-  font-size: 0.65rem;
-  color: var(--ax-text-subtle);
-  word-break: break-all;
-}
 .dot-popover-details {
   margin-top: 0.5rem;
   font-size: 0.68rem;

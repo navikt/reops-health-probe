@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Tag, Button, Popover, ActionMenu, Table } from "@navikt/ds-react";
+import { Tag, Button, Popover, ActionMenu, Table, CopyButton, Tooltip, Detail } from "@navikt/ds-react";
 import {
   PlayIcon,
   PauseIcon,
@@ -54,19 +54,21 @@ function makeTip(run: RunData): TipData {
     errorDetails: run.ok ? "" : (run.errorDetails ?? ""),
     ingressDetails: run.ingressDetails ?? "",
     bqDetails: run.bqDetails ?? "",
+    bqQuery: run.bqQuery ?? "",
   };
 }
 
-function makeRunningTip(startedAt: number): TipData {
+function makeRunningTip(startedAt: number, probeId?: string): TipData {
   return {
     status: "IN PROGRESS",
     startedAt,
     durationMs: null,
-    probeId: "",
+    probeId: probeId ?? "",
     msg: "",
     errorDetails: "",
     ingressDetails: "",
     bqDetails: "",
+    bqQuery: "",
   };
 }
 
@@ -112,7 +114,7 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
             <Table.HeaderCell scope="row">Probe ID</Table.HeaderCell>
             <Table.DataCell>
               {tip.probeId ? (
-                <span className="dot-popover-probe-id">{tip.probeId}</span>
+                <Detail as="code" textColor="subtle">{tip.probeId}</Detail>
               ) : (
                 <span className="dot-popover-row-muted">pending…</span>
               )}
@@ -132,7 +134,14 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
       )}
       {tip.bqDetails && (
         <>
-          <div className="dot-popover-section-label">BigQuery response</div>
+          <div className="dot-popover-section-label">
+            BigQuery response
+            {tip.bqQuery && (
+              <Tooltip content="Copy SQL query">
+                <CopyButton copyText={tip.bqQuery} size="xsmall" />
+              </Tooltip>
+            )}
+          </div>
           <pre className="dot-popover-details dot-popover-bq">{tip.bqDetails}</pre>
         </>
       )}
@@ -289,7 +298,7 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
   }
 
   const completedDots = [...history].reverse().map(makeTip);
-  const runningDots = activeRuns.map((r) => makeRunningTip(r.startedAt));
+  const runningDots = activeRuns.map((r) => makeRunningTip(r.startedAt, r.probeId));
   const allDots = [...completedDots, ...runningDots];
 
   return (

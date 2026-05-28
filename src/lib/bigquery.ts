@@ -87,6 +87,8 @@ export interface BQQueryResult {
    * Authorization header value is redacted.
    */
   requestSummary: string;
+  /** The SQL query string that was executed — for copy-paste debugging. */
+  query: string;
 }
 
 export async function bqQuery(
@@ -128,5 +130,6 @@ export async function bqQuery(
     rows: (data.rows ?? []) as { f: { v: string }[] }[],
     totalRows: parseInt(data.totalRows ?? "0", 10),
     requestSummary: result.requestSummary,
+    query,
   };
 }

@@ -13,7 +13,7 @@ export function GET() {
     out[name] = {
       paused: state.paused,
       running: state.activeRuns.length > 0,
-      activeRuns: state.activeRuns.map((r) => ({ startedAt: r.startedAt })),
+      activeRuns: state.activeRuns.map((r) => ({ startedAt: r.startedAt, probeId: r.probeId })),
       now,
       history: state.history.map((run) => ({
         timestamp: run.timestamp,
@@ -23,6 +23,7 @@ export function GET() {
         probeId: run.result.probeId ?? null,
         ingressDetails: run.result.ingressDetails ?? null,
         bqDetails: run.result.bqDetails ?? null,
+        bqQuery: run.result.bqQuery ?? null,
         durationMs: run.result.durationMs,
       })),
       latest: latest
@@ -34,6 +35,7 @@ export function GET() {
             probeId: latest.result.probeId ?? null,
             ingressDetails: latest.result.ingressDetails ?? null,
             bqDetails: latest.result.bqDetails ?? null,
+            bqQuery: latest.result.bqQuery ?? null,
             durationMs: latest.result.durationMs,
           }
         : null,

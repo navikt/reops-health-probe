@@ -1,5 +1,5 @@
 import { recordProbe } from "./metrics";
-import { isPaused, recordRun, setRunning } from "./state";
+import { isPaused, recordRun, setRunning, updateActiveRun } from "./state";
 import { slackAlertFailing, slackAlertRecovered } from "./slack";
 import { log, logError } from "./log";
 
@@ -14,6 +14,8 @@ export interface ProbeResult {
   ingressDetails?: string;
   /** Raw response from the BigQuery check — shown in the tooltip for transparency. */
   bqDetails?: string;
+  /** The SQL query executed against BigQuery — for copy-paste debugging in the BQ console. */
+  bqQuery?: string;
   durationMs: number;
 }
 
@@ -25,6 +27,11 @@ export interface ProbeContext {
    * fetch calls and sleeps so they bail out immediately on pause.
    */
   signal: AbortSignal;
+  /**
+   * Call once the probe ID is known (after the ingress send) so the running
+   * dot in the dashboard can show it before the run completes.
+   */
+  setProbeId(probeId: string): void;
 }
 
 export type ProbeSchedule = { type: "interval"; ms: number };
@@ -63,12 +70,17 @@ export async function runProbe(probe: Probe): Promise<void> {
   }
 
   const { runId, signal } = setRunning(probe.name);
+  const ctx: ProbeContext = {
+    runId,
+    signal,
+    setProbeId: (probeId) => updateActiveRun(probe.name, runId, { probeId }),
+  };
   log({ event: "probe.start", probe: probe.name, run_id: runId });
 
   const start = Date.now();
   let result: ProbeResult;
   try {
-    result = await probe.run({ runId, signal });
+    result = await probe.run(ctx);
   } catch (err) {
     if (signal.aborted) {
       // Probe was paused mid-run — discard result, don't record or alert.
