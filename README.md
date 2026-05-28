@@ -1,6 +1,6 @@
 # reops-health-probe
 
-Deno service that continuously runs probes against data pipelines and exposes results as Prometheus metrics. Sends Slack alerts on failure and recovery.
+Next.js service that continuously runs probes against data pipelines and exposes results as Prometheus metrics. Sends Slack alerts on failure and recovery.
 
 ## How it works
 
@@ -23,9 +23,7 @@ Each probe injects a uniquely identifiable event, waits for the pipeline to proc
 
 ### `innblikk-pipeline`
 
-Tests the Innblikk → BigQuery pipeline. Sends an event via the Innblikk proxy and verifies it appears in BigQuery within 10 minutes.
-
-Runs every 12 minutes via `Deno.cron`.
+Tests the Innblikk → BigQuery pipeline. Sends an event via the Innblikk proxy and verifies it appears in BigQuery.
 
 ## Metrics
 
@@ -54,20 +52,20 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ENVIRONMENT=dev
 ```
 
-Alerts use Slack Block Kit for rich formatting. Alerts fire only on state **transitions** (ok→fail, fail→ok). After 2 ok→fail transitions within 1 hour, further failure alerts are throttled and a single notice is posted instead. Throttle resets on recovery.
+Alerts use Slack Block Kit for rich formatting. Alerts fire only on state **transitions** (ok→fail, fail→ok). Failure alerts require 3 consecutive failures before firing. Throttle resets on recovery.
 
 Probe targets (URLs, project IDs, table names) are hardcoded in each probe file. To change them, edit the probe directly.
 
 ## Development
 
-Requires [Deno](https://deno.land/) v2+.
+Requires [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
 
 ```bash
 # Run with auto-reload
-deno task dev
+pnpm dev
 
 # Type-check
-deno task check
+pnpm check
 ```
 
 ## Deployment
@@ -131,22 +129,22 @@ Gatus may be a good fit if we ever add simple uptime checks (is this endpoint re
 1. Create `src/probes/<name>.ts` exporting a `Probe` object. Hardcode all probe-specific config (URLs, project IDs, etc.) directly in the file:
 
 ```ts
-import type { Probe } from "../lib/runner.ts";
+import type { Probe } from "../lib/runner";
 
 export const myProbe: Probe = {
   name: "my-probe",
+  schedule: { type: "interval", ms: 5 * 60 * 1000 },
   async run() {
     // inject something, wait, verify
-    return { ok: true, durationMs: 0, ingressStatusCode: 200 };
+    return { ok: true, durationMs: 0 };
   },
 };
 ```
 
-2. Register it in `src/main.ts`:
+2. Add it to the `probes` array in `server.ts`:
 
 ```ts
-import { myProbe } from "./probes/my-probe.ts";
+import { myProbe } from "./src/probes/my-probe";
 
-registerProbe(myProbe.name);
-Deno.cron("probe:my-probe", { minute: { every: 5 } }, () => runProbe(myProbe));
+const probes = [innblikkPipelineProbe, myProbe];
 ```
