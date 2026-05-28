@@ -48,7 +48,7 @@ function probeCard(name: string): string {
   }
 
   const completedDots = state.history
-    .slice(0, 20)
+    .slice()
     .reverse()
     .map((run) => {
       const status = run.result.ok ? "OK" : (run.result.message ?? "failed");
@@ -97,6 +97,8 @@ function probeCard(name: string): string {
         }`
       : "";
 
+  const totalHistory = state.history.length;
+
   return `
   <div id="card-${name}" class="card ${cardClass(state, latest?.result.ok)}">
     <div class="card-header">
@@ -108,7 +110,7 @@ function probeCard(name: string): string {
     </div>
     <div id="fail-msg-${name}">${failMsg}</div>
     <div id="last-run-${name}">${lastRunInfo}</div>
-    <div class="history-label">Last ${state.history.length} runs:</div>
+    <div class="history-label">Last ${totalHistory} runs:</div>
     <div id="history-dots-${name}" class="history-dots">${historyDots || '<span class="meta">—</span>'}</div>
   </div>`;
 }
@@ -125,7 +127,7 @@ export function renderStateJson(): string {
       running: state.activeRuns.length > 0,
       activeRuns: state.activeRuns.map((r) => ({ startedAt: r.startedAt })),
       now,
-      history: state.history.slice(0, 20).map((run) => ({
+      history: state.history.map((run) => ({
         timestamp: run.timestamp,
         ok: run.result.ok,
         message: run.result.message ?? null,
@@ -275,7 +277,7 @@ export function renderDashboard(): string {
     <a href="/docs">Grafana docs</a>
   </nav>
   ${cards}
-  <p class="refresh-note">Live · updates every 10s · build ${shaHtml}</p>
+  <p class="refresh-note"> build ${shaHtml}</p>
   <div id="tooltip" class="dot-popover" role="tooltip"></div>
   <script type="module">
     import { computePosition, flip, shift, offset } from 'https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.6/+esm';

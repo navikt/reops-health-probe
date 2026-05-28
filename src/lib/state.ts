@@ -16,7 +16,7 @@ export interface ProbeState {
   history: ProbeRun[]; // newest first, capped at MAX_HISTORY
 }
 
-const MAX_HISTORY = 40;
+const MAX_HISTORY = 1000;
 let nextRunId = 0;
 
 const probeStates = new Map<string, ProbeState>();
