@@ -12,7 +12,9 @@ const isProd = ["prod", "production"].includes(
 const INGRESS_URL = isProd
   ? "https://reops-event-proxy.ekstern.nav.no"
   : "https://reops-event-proxy.ekstern.dev.nav.no";
-const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
+const WEBSITE_ID = isProd
+  ? "773df94f-7025-432b-a010-ffe1e9246e27"
+  : "96a8b610-7391-45f5-9253-84bee2333669";
 const BQ_PROJECT = isProd
   ? "team-researchops-prod-01d6"
   : "team-researchops-dev-4396";
