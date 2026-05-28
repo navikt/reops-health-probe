@@ -68,9 +68,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      <h1>reops-health-probe</h1>
       <div className="header-row">
-        <p className="subtitle">Pipeline health monitor</p>
+        <h1>reops-health-probe</h1>
         {envLabel && (
           <span className="env-chip" title={`Environment: ${envLabel}`}>
             {envLabel}
