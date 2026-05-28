@@ -103,6 +103,17 @@ function probeCard(name: string): string {
     ? `<div class="meta">Last run: <strong>${relativeTime(latest.timestamp)}</strong> · ${formatTimestamp(latest.timestamp)} · Duration: <strong>${formatDuration(latest.result.durationMs)}</strong> · Ingress: <strong>${latest.result.ingressStatusCode}</strong></div>`
     : `<div class="meta">No runs recorded yet.</div>`;
 
+  const testMenuBtn = `
+  <div class="kebab-wrap">
+    <button class="btn btn-kebab" aria-haspopup="menu" aria-expanded="false" aria-label="Test Slack alerts" data-kebab="${escapeHtml(name)}">⋯</button>
+    <div class="kebab-menu" role="menu" aria-label="Test Slack alerts" hidden>
+      <button class="kebab-item" role="menuitem" data-test-type="failure" data-probe="${escapeHtml(name)}">🔴 Simulate failure</button>
+      <button class="kebab-item" role="menuitem" data-test-type="recovery" data-probe="${escapeHtml(name)}">✅ Simulate recovery</button>
+      <button class="kebab-item" role="menuitem" data-test-type="throttle" data-probe="${escapeHtml(name)}">⏸️ Simulate throttle</button>
+    </div>
+    <output class="test-feedback" aria-live="polite"></output>
+  </div>`;
+
   const runBtn = `<form method="POST" action="/admin/run/${encodeURIComponent(name)}"><button class="btn btn-run">⚡ Run now</button></form>`;
 
   const pauseBtn = state.paused
@@ -127,7 +138,7 @@ function probeCard(name: string): string {
         <code>${name}</code>
         <span id="badge-${name}">${statusLabel}</span>
       </div>
-      <div class="card-actions">${runBtn}${pauseBtn}</div>
+      <div class="card-actions">${runBtn}${pauseBtn}${testMenuBtn}</div>
     </div>
     <div id="fail-msg-${name}">${failMsg}</div>
     <div id="last-run-${name}">${lastRunInfo}</div>
@@ -305,6 +316,15 @@ export function renderDashboard(): string {
     .btn-pause:hover { background: #975a16; }
     .btn-resume { background: #1c4532; color: #68d391; }
     .btn-resume:hover { background: #276749; }
+    .btn-kebab { background: #1a1f2e; color: #718096; border: 1px solid #2d3748; padding: 0.35rem 0.6rem; font-size: 1rem; line-height: 1; letter-spacing: 0.05em; }
+    .btn-kebab:hover { background: #2d3748; color: #a0aec0; }
+    .btn-kebab[aria-expanded="true"] { background: #2d3748; color: #e2e8f0; }
+    .kebab-wrap { position: relative; display: flex; align-items: center; gap: 0.5rem; }
+    .kebab-menu { position: absolute; top: calc(100% + 4px); right: 0; background: #1a1f2e; border: 1px solid #4a5568; border-radius: 0.5rem; padding: 0.25rem; min-width: 190px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    .kebab-item { display: block; width: 100%; text-align: left; background: none; border: none; color: #e2e8f0; font-size: 0.8rem; font-weight: 500; padding: 0.45rem 0.75rem; border-radius: 0.3rem; cursor: pointer; }
+    .kebab-item:hover, .kebab-item:focus { background: #2d3748; outline: none; }
+    .kebab-item:focus-visible { outline: 2px solid #63b3ed; outline-offset: -2px; }
+    .test-feedback { font-size: 0.75rem; color: #68d391; white-space: nowrap; min-width: 0; }
     .refresh-note { font-size: 0.75rem; color: #4a5568; margin-top: 2rem; }
     .env-chip { display: inline-flex; align-items: center; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.7rem; border-radius: 999px; border: 1.5px solid #4a5568; background: #1a1f2e; color: #a0aec0; }
   </style>
@@ -395,6 +415,66 @@ export function renderDashboard(): string {
     document.addEventListener('click', () => hideTooltip());
     tooltip.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTooltip(); });
+
+    // ── Kebab test-alert menus ─────────────────────────────────────────────────
+
+    function closeAllKebabs() {
+      document.querySelectorAll('.kebab-menu:not([hidden])').forEach(m => {
+        m.setAttribute('hidden', '');
+        m.previousElementSibling?.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-kebab]');
+      if (btn) {
+        e.stopPropagation();
+        const menu = btn.nextElementSibling;
+        const open = !menu.hasAttribute('hidden');
+        closeAllKebabs();
+        if (!open) {
+          menu.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          menu.querySelector('.kebab-item')?.focus();
+        }
+        return;
+      }
+      closeAllKebabs();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeAllKebabs(); return; }
+      const item = e.target.closest('.kebab-item');
+      if (!item) return;
+      const items = [...item.closest('.kebab-menu').querySelectorAll('.kebab-item')];
+      const idx = items.indexOf(item);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+    });
+
+    document.querySelectorAll('.kebab-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        const probe = item.dataset.probe;
+        const type  = item.dataset.testType;
+        const wrap  = item.closest('.kebab-wrap');
+        const out   = wrap?.querySelector('output');
+        closeAllKebabs();
+        try {
+          const res = await fetch(\`/admin/test-alert/\${encodeURIComponent(probe)}/\${type}\`, { method: 'POST' });
+          if (out) {
+            out.textContent = res.ok ? '✓ Sent to Slack' : '✗ Failed';
+            out.style.color = res.ok ? '#68d391' : '#fc8181';
+            setTimeout(() => { out.textContent = ''; }, 2500);
+          }
+        } catch {
+          if (out) {
+            out.textContent = '✗ Network error';
+            out.style.color = '#fc8181';
+            setTimeout(() => { out.textContent = ''; }, 2500);
+          }
+        }
+      });
+    });
 
     // ── Live state polling ─────────────────────────────────────────────────────
 

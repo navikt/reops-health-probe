@@ -99,8 +99,9 @@ async function postToSlack(payload: unknown): Promise<void> {
 export async function slackAlertFailing(
   probe: string,
   message: string,
+  { bypassThrottle = false }: { bypassThrottle?: boolean } = {},
 ): Promise<void> {
-  const decision = recordFailureTransition(probe);
+  const decision = bypassThrottle ? "send" : recordFailureTransition(probe);
 
   if (decision === "suppress") {
     log({ event: "slack.suppressed", probe, reason: "throttled" });
@@ -189,6 +190,42 @@ export async function slackAlertFailing(
               {
                 type: "mrkdwn",
                 text: `<${PROBE_UI_URL}|See probe details & pause health check>`,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
+
+export async function slackAlertThrottleTest(probe: string): Promise<void> {
+  const nextAlertAt = new Date(
+    Date.now() + THROTTLE_WINDOW_MS,
+  ).toLocaleTimeString("no-NO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Oslo",
+  });
+  await postToSlack({
+    text: `⏸️ [TEST] Alert throttled for *${probe}* (${envLabel()})`,
+    attachments: [
+      {
+        color: "warning",
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `⏸️ *Alert throttled* _(test message)_ — *${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\nWe know it's failing. Check the dashboard and look into it. Alerts will resume after *${nextAlertAt}*.`,
+            },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `*${envLabel()}* environment  ·  <${PROBE_UI_URL}|See probe dashboard & pause if needed>`,
               },
             ],
           },
