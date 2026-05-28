@@ -19,14 +19,4 @@ export interface ProbeStateData {
   latest: RunData | null;
 }
 
-export interface TipData {
-  status: string;
-  startedAt: number;
-  durationMs: number | null;
-  probeId: string;
-  msg: string;
-  errorDetails: string;
-  ingressDetails: string;
-  bqDetails: string;
-  bqQuery: string;
-}
+

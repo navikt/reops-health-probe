@@ -126,10 +126,14 @@ export async function bqQuery(
   }
 
   const data = JSON.parse(result.body);
+  const interpolatedQuery = params.reduce(
+    (sql, p) => sql.replace(new RegExp(`@${p.name}\\b`, "g"), `'${p.value.replace(/'/g, "\\'")}'`),
+    query,
+  );
   return {
     rows: (data.rows ?? []) as { f: { v: string }[] }[],
     totalRows: parseInt(data.totalRows ?? "0", 10),
     requestSummary: result.requestSummary,
-    query,
+    query: interpolatedQuery,
   };
 }

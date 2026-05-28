@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Tag, Button, Popover, ActionMenu, Table, CopyButton, Tooltip, Detail } from "@navikt/ds-react";
+import { Tag, Button, Popover, ActionMenu, Table, CopyButton, Detail } from "@navikt/ds-react";
 import {
   PlayIcon,
   PauseIcon,
@@ -13,7 +13,7 @@ import {
   XMarkIcon,
   ExclamationmarkTriangleIcon,
 } from "@navikt/aksel-icons";
-import type { ProbeStateData, RunData, TipData } from "./types";
+import type { ProbeStateData, RunData } from "./types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -44,67 +44,39 @@ export function formatInterval(ms: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function makeTip(run: RunData): TipData {
-  return {
-    status: run.ok ? "OK" : "FAILED",
-    startedAt: run.timestamp,
-    durationMs: run.durationMs,
-    probeId: run.probeId ?? "",
-    msg: run.ok ? "" : (run.message ?? ""),
-    errorDetails: run.ok ? "" : (run.errorDetails ?? ""),
-    ingressDetails: run.ingressDetails ?? "",
-    bqDetails: run.bqDetails ?? "",
-    bqQuery: run.bqQuery ?? "",
-  };
-}
-
-function makeRunningTip(startedAt: number, probeId?: string): TipData {
-  return {
-    status: "IN PROGRESS",
-    startedAt,
-    durationMs: null,
-    probeId: probeId ?? "",
-    msg: "",
-    errorDetails: "",
-    ingressDetails: "",
-    bqDetails: "",
-    bqQuery: "",
-  };
-}
-
 // ── DotPopoverContent ─────────────────────────────────────────────────────
 
-function DotPopoverContent({ tip }: { tip: TipData }) {
+function DotPopoverContent({ run, inProgress }: { run: RunData; inProgress?: boolean }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
-    if (tip.status !== "IN PROGRESS") return;
+    if (!inProgress) return;
     const id = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(id);
-  }, [tip.status]);
+  }, [inProgress]);
 
-  const statusCls =
-    tip.status === "OK"
-      ? "dot-popover-status ok"
-      : tip.status === "IN PROGRESS"
-      ? "dot-popover-status running"
-      : "dot-popover-status fail";
+  const status = inProgress ? "IN PROGRESS" : run.ok ? "OK" : "FAILED";
 
-  const durationLabel =
-    tip.durationMs != null
-      ? fmt(tip.durationMs)
-      : now != null
-      ? fmt(now - tip.startedAt) + " elapsed"
-      : "…";
+  const statusCls = inProgress
+    ? "dot-popover-status running"
+    : run.ok
+    ? "dot-popover-status ok"
+    : "dot-popover-status fail";
+
+  const durationLabel = !inProgress
+    ? fmt(run.durationMs)
+    : now != null
+    ? fmt(now - run.timestamp) + " elapsed"
+    : "…";
 
   return (
     <>
-      <div className={statusCls}>{tip.status}</div>
+      <div className={statusCls}>{status}</div>
       <Table size="small" className="dot-popover-table">
         <Table.Body>
           <Table.Row>
             <Table.HeaderCell scope="row">Started</Table.HeaderCell>
-            <Table.DataCell>{fmtTs(tip.startedAt)}</Table.DataCell>
+            <Table.DataCell>{fmtTs(run.timestamp)}</Table.DataCell>
           </Table.Row>
           <Table.Row>
             <Table.HeaderCell scope="row">Duration</Table.HeaderCell>
@@ -113,8 +85,8 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
           <Table.Row>
             <Table.HeaderCell scope="row">Probe ID</Table.HeaderCell>
             <Table.DataCell>
-              {tip.probeId ? (
-                <Detail as="code" textColor="subtle">{tip.probeId}</Detail>
+              {run.probeId ? (
+                <Detail as="code" textColor="subtle">{run.probeId}</Detail>
               ) : (
                 <span className="dot-popover-row-muted">pending…</span>
               )}
@@ -122,27 +94,28 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
           </Table.Row>
         </Table.Body>
       </Table>
-      {tip.msg && <div className="dot-popover-msg">{tip.msg}</div>}
-      {tip.errorDetails && (
-        <pre className="dot-popover-details">{tip.errorDetails}</pre>
+      {!run.ok && run.message && <div className="dot-popover-msg">{run.message}</div>}
+      {!run.ok && run.errorDetails && (
+        <pre className="dot-popover-details">{run.errorDetails}</pre>
       )}
-      {tip.ingressDetails && (
+      {run.bqQuery && (
+        <CopyButton
+          copyText={run.bqQuery}
+          size="small"
+          text="Copy BQ query"
+          activeText="Copied!"
+        />
+      )}
+      {run.ingressDetails && (
         <>
           <div className="dot-popover-section-label">Ingress request + response</div>
-          <pre className="dot-popover-details dot-popover-ingress">{tip.ingressDetails}</pre>
+          <pre className="dot-popover-details dot-popover-ingress">{run.ingressDetails}</pre>
         </>
       )}
-      {tip.bqDetails && (
+      {run.bqDetails && (
         <>
-          <div className="dot-popover-section-label">
-            BigQuery response
-            {tip.bqQuery && (
-              <Tooltip content="Copy SQL query">
-                <CopyButton copyText={tip.bqQuery} size="xsmall" />
-              </Tooltip>
-            )}
-          </div>
-          <pre className="dot-popover-details dot-popover-bq">{tip.bqDetails}</pre>
+          <div className="dot-popover-section-label">BigQuery response</div>
+          <pre className="dot-popover-details dot-popover-bq">{run.bqDetails}</pre>
         </>
       )}
     </>
@@ -151,16 +124,15 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
 
 // ── Dot ───────────────────────────────────────────────────────────────────
 
-function Dot({ tip }: { tip: TipData }) {
+function Dot({ run, inProgress }: { run: RunData; inProgress?: boolean }) {
   const anchorRef = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
 
-  const cls =
-    tip.status === "OK"
-      ? "dot dot-ok"
-      : tip.status === "IN PROGRESS"
-      ? "dot dot-running"
-      : "dot dot-fail";
+  const cls = inProgress
+    ? "dot dot-running"
+    : run.ok
+    ? "dot dot-ok"
+    : "dot dot-fail";
 
   return (
     <>
@@ -168,7 +140,7 @@ function Dot({ tip }: { tip: TipData }) {
         ref={anchorRef}
         className={cls}
         tabIndex={0}
-        role={tip.status === "IN PROGRESS" ? "status" : "button"}
+        role={inProgress ? "status" : "button"}
         aria-expanded={open}
         onClick={(e) => {
           e.stopPropagation();
@@ -188,7 +160,7 @@ function Dot({ tip }: { tip: TipData }) {
         placement="top"
       >
         <Popover.Content className="dot-popover-content">
-          <DotPopoverContent tip={tip} />
+          <DotPopoverContent run={run} inProgress={inProgress} />
         </Popover.Content>
       </Popover>
     </>
@@ -297,9 +269,20 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
     badge = <Tag variant="error-moderate" size="small">FAILING</Tag>;
   }
 
-  const completedDots = [...history].reverse().map(makeTip);
-  const runningDots = activeRuns.map((r) => makeRunningTip(r.startedAt, r.probeId));
-  const allDots = [...completedDots, ...runningDots];
+  const completedDots = [...history].reverse();
+  const runningDots = activeRuns.map(
+    (r): RunData => ({
+      timestamp: r.startedAt,
+      ok: true,
+      message: null,
+      errorDetails: null,
+      probeId: r.probeId ?? null,
+      ingressDetails: null,
+      bqDetails: null,
+      bqQuery: null,
+      durationMs: 0,
+    }),
+  );
 
   return (
     <div className={cardClass}>
@@ -342,12 +325,17 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
 
       <div className="history-label">Last {history.length} runs:</div>
       <div className="history-dots">
-        {allDots.length === 0 ? (
+        {completedDots.length === 0 && runningDots.length === 0 ? (
           <span className="meta">—</span>
         ) : (
-          allDots.map((tip, i) => (
-            <Dot key={`${tip.startedAt}-${i}`} tip={tip} />
-          ))
+          <>
+            {completedDots.map((run, i) => (
+              <Dot key={`${run.timestamp}-${i}`} run={run} />
+            ))}
+            {runningDots.map((run, i) => (
+              <Dot key={`running-${run.timestamp}-${i}`} run={run} inProgress />
+            ))}
+          </>
         )}
       </div>
     </div>
