@@ -7,7 +7,6 @@ export interface RunData {
   ingressDetails: string | null;
   bqDetails: string | null;
   durationMs: number;
-  ingressStatusCode: number;
 }
 
 export interface ProbeStateData {

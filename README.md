@@ -34,8 +34,8 @@ Exposed at `:9091/metrics` in Prometheus text format.
 | Metric | Type | Description |
 |---|---|---|
 | `probe_success` | gauge | `1` if last run succeeded, `0` if failed |
+| `probe_success_rate` | gauge | Running average of successful runs over full history (0.0–1.0) |
 | `probe_duration_seconds` | gauge | Duration of last probe run |
-| `probe_ingress_status_code` | gauge | HTTP status from ingress on last run |
 | `probe_last_run_timestamp_seconds` | gauge | Unix timestamp of last run |
 
 All metrics carry a `probe` label with the probe name.
@@ -107,6 +107,24 @@ gcloud projects add-iam-policy-binding team-researchops-dev-4396 \
 gcloud iam service-accounts keys create reops-health-probe-key.json \
   --iam-account=reops-health-probe@team-researchops-dev-4396.iam.gserviceaccount.com
 ```
+
+## Why not Gatus?
+
+[Gatus](https://github.com/TwiN/gatus) is a solid open-source health-checking tool and worth considering for simpler setups. We evaluated it, but it didn't fit our needs.
+
+Gatus probes are defined in YAML config: each probe is a single HTTP request to a fixed endpoint, with basic assertions on the response (status code, body contains a string, etc.). That covers a lot of common use cases well.
+
+Our pipelines require something more involved. A typical probe here looks like:
+
+1. Send a request to endpoint A with a generated UUID payload
+2. Wait several minutes for the pipeline to process it
+3. Query a completely different system (e.g. BigQuery) to verify the UUID arrived
+4. Parse the response and assert on specific field values
+5. Report success or failure — with full request/response detail for debugging
+
+There's no way to express that kind of multi-step, stateful, cross-system logic in Gatus's config format. A probe here is just a TypeScript async function — it can do anything, call anything, wait arbitrarily, and return structured results. That flexibility is the whole point.
+
+Gatus may be a good fit if we ever add simple uptime checks (is this endpoint reachable? does it return 200?). For pipeline integrity probes, we need code.
 
 ## Adding a probe
 

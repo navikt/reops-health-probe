@@ -94,7 +94,6 @@ export const innblikkPipelineProbe: Probe = {
         errorDetails: `Ingress request failed — see ingress details below.`,
         ingressDetails: ingress.requestSummary,
         durationMs: Date.now() - start,
-        ingressStatusCode: ingress.statusCode,
       };
     }
 
@@ -136,7 +135,6 @@ export const innblikkPipelineProbe: Probe = {
         ingressDetails: ingress.requestSummary,
         bqDetails: bq.requestSummary,
         durationMs,
-        ingressStatusCode: ingress.statusCode,
       };
     }
 
@@ -153,7 +151,6 @@ export const innblikkPipelineProbe: Probe = {
       ingressDetails: ingress.requestSummary,
       bqDetails: bq.requestSummary,
       durationMs,
-      ingressStatusCode: ingress.statusCode,
     };
   },
 };

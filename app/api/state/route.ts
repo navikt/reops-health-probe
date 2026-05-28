@@ -24,7 +24,6 @@ export function GET() {
         ingressDetails: run.result.ingressDetails ?? null,
         bqDetails: run.result.bqDetails ?? null,
         durationMs: run.result.durationMs,
-        ingressStatusCode: run.result.ingressStatusCode,
       })),
       latest: latest
         ? {
@@ -36,7 +35,6 @@ export function GET() {
             ingressDetails: latest.result.ingressDetails ?? null,
             bqDetails: latest.result.bqDetails ?? null,
             durationMs: latest.result.durationMs,
-            ingressStatusCode: latest.result.ingressStatusCode,
           }
         : null,
     };

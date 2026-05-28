@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Tag, Button, Popover, ActionMenu } from "@navikt/ds-react";
+import { Tag, Button, Popover, ActionMenu, Table } from "@navikt/ds-react";
 import {
   PlayIcon,
   PauseIcon,
@@ -73,14 +73,14 @@ function makeRunningTip(startedAt: number): TipData {
 // ── DotPopoverContent ─────────────────────────────────────────────────────
 
 function DotPopoverContent({ tip }: { tip: TipData }) {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    setNow(Date.now());
     if (tip.status !== "IN PROGRESS") return;
-    const id = setInterval(() => setTick((t) => t + 1), 1_000);
+    const id = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(id);
   }, [tip.status]);
 
-  const now = Date.now();
   const statusCls =
     tip.status === "OK"
       ? "dot-popover-status ok"
@@ -91,30 +91,35 @@ function DotPopoverContent({ tip }: { tip: TipData }) {
   const durationLabel =
     tip.durationMs != null
       ? fmt(tip.durationMs)
-      : fmt(now - tip.startedAt) + " elapsed";
+      : now != null
+      ? fmt(now - tip.startedAt) + " elapsed"
+      : "…";
 
   return (
     <>
       <div className={statusCls}>{tip.status}</div>
-      <div className="dot-popover-row">
-        <span>Started</span>
-        <span>{fmtTs(tip.startedAt)}</span>
-      </div>
-      <div className="dot-popover-row">
-        <span>Duration</span>
-        <span>{durationLabel}</span>
-      </div>
-      {tip.probeId ? (
-        <div className="dot-popover-row">
-          <span>Probe ID</span>
-          <span className="dot-popover-probe-id">{tip.probeId}</span>
-        </div>
-      ) : (
-        <div className="dot-popover-row dot-popover-row-muted">
-          <span>Probe ID</span>
-          <span>pending…</span>
-        </div>
-      )}
+      <Table size="small" className="dot-popover-table">
+        <Table.Body>
+          <Table.Row>
+            <Table.HeaderCell scope="row">Started</Table.HeaderCell>
+            <Table.DataCell>{fmtTs(tip.startedAt)}</Table.DataCell>
+          </Table.Row>
+          <Table.Row>
+            <Table.HeaderCell scope="row">Duration</Table.HeaderCell>
+            <Table.DataCell>{durationLabel}</Table.DataCell>
+          </Table.Row>
+          <Table.Row>
+            <Table.HeaderCell scope="row">Probe ID</Table.HeaderCell>
+            <Table.DataCell>
+              {tip.probeId ? (
+                <span className="dot-popover-probe-id">{tip.probeId}</span>
+              ) : (
+                <span className="dot-popover-row-muted">pending…</span>
+              )}
+            </Table.DataCell>
+          </Table.Row>
+        </Table.Body>
+      </Table>
       {tip.msg && <div className="dot-popover-msg">{tip.msg}</div>}
       {tip.errorDetails && (
         <pre className="dot-popover-details">{tip.errorDetails}</pre>
@@ -313,8 +318,7 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
           <div className="meta">
             Last run: <strong>{relTime(latest.timestamp, now)}</strong> ·{" "}
             {fmtTs(latest.timestamp)} · Duration:{" "}
-            <strong>{fmt(latest.durationMs)}</strong> · Ingress:{" "}
-            <strong>{latest.ingressStatusCode}</strong>
+            <strong>{fmt(latest.durationMs)}</strong>
           </div>
         ) : (
           <div className="meta">No runs recorded yet.</div>

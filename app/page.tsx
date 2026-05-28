@@ -40,7 +40,6 @@ export default function DashboardPage() {
         ingressDetails: run.result.ingressDetails ?? null,
         bqDetails: run.result.bqDetails ?? null,
         durationMs: run.result.durationMs,
-        ingressStatusCode: run.result.ingressStatusCode,
       })),
       latest: latest
         ? {
@@ -52,7 +51,6 @@ export default function DashboardPage() {
             ingressDetails: latest.result.ingressDetails ?? null,
             bqDetails: latest.result.bqDetails ?? null,
             durationMs: latest.result.durationMs,
-            ingressStatusCode: latest.result.ingressStatusCode,
           }
         : null,
     };

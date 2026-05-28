@@ -15,7 +15,6 @@ export interface ProbeResult {
   /** Raw response from the BigQuery check — shown in the tooltip for transparency. */
   bqDetails?: string;
   durationMs: number;
-  ingressStatusCode: number;
 }
 
 export interface ProbeContext {
@@ -78,7 +77,6 @@ export async function runProbe(probe: Probe): Promise<void> {
         ok: false,
         message: "Aborted (probe paused mid-run)",
         durationMs: Date.now() - start,
-        ingressStatusCode: 0,
       });
       return;
     }
@@ -89,7 +87,6 @@ export async function runProbe(probe: Probe): Promise<void> {
       message,
       errorDetails,
       durationMs: Date.now() - start,
-      ingressStatusCode: 0,
     };
   }
 
@@ -98,7 +95,6 @@ export async function runProbe(probe: Probe): Promise<void> {
   recordProbe(probe.name, {
     success: result.ok,
     durationMs: result.durationMs,
-    ingressStatusCode: result.ingressStatusCode,
   });
 
   const alertState = getAlertState(probe.name);
