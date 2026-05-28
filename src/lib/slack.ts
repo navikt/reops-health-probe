@@ -1,8 +1,10 @@
+import { log, logError } from "./log.ts";
+
 const webhookUrl = Deno.env.get("SLACK_WEBHOOK_URL") ?? "";
 
 export async function slackAlert(message: string): Promise<void> {
   if (!webhookUrl) {
-    console.warn("[slack] SLACK_WEBHOOK_URL not set, skipping alert");
+    log({ event: "slack.skipped", reason: "SLACK_WEBHOOK_URL not set" });
     return;
   }
   try {
@@ -12,9 +14,9 @@ export async function slackAlert(message: string): Promise<void> {
       body: JSON.stringify({ text: message }),
     });
     if (!res.ok) {
-      console.error(`[slack] webhook failed: ${res.status} ${await res.text()}`);
+      logError({ event: "slack.failed", status: res.status, body: await res.text() });
     }
   } catch (err) {
-    console.warn(`[slack] webhook error (skipping): ${err instanceof Error ? err.message : err}`);
+    log({ event: "slack.error", message: err instanceof Error ? err.message : String(err) });
   }
 }

@@ -1,15 +1,23 @@
 import "@std/dotenv/load";
+import { log } from "./lib/log.ts";
 import { renderMetrics } from "./lib/metrics.ts";
 import { runProbe } from "./lib/runner.ts";
 import { registerProbe, setPaused } from "./lib/state.ts";
-import { renderDashboard, renderDocs } from "./lib/ui.ts";
+import { renderDashboard, renderDocs, renderStateJson } from "./lib/ui.ts";
 import { innblikkPipelineProbe } from "./probes/innblikk-pipeline.ts";
 
 const probes = [innblikkPipelineProbe];
 
 for (const probe of probes) {
   registerProbe(probe.name);
-  Deno.cron(`probe-${probe.name}`, probe.schedule, () => runProbe(probe));
+  if (probe.intervalMs != null) {
+    // setInterval fires unconditionally — concurrent in-flight runs accumulate.
+    // Use this when the schedule interval is shorter than the probe run duration.
+    setInterval(() => runProbe(probe), probe.intervalMs);
+  } else {
+    // Deno.cron skips ticks that overlap with a still-running invocation.
+    Deno.cron(`probe-${probe.name}`, probe.schedule, () => runProbe(probe));
+  }
 }
 
 // Run all probes once on startup so metrics are populated immediately
@@ -20,6 +28,13 @@ for (const probe of probes) {
 const server = Deno.serve({ port: 9091 }, (req) => {
   const url = new URL(req.url);
   const { pathname } = url;
+
+  // GET /api/state
+  if (req.method === "GET" && pathname === "/api/state") {
+    return new Response(renderStateJson(), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
 
   // GET /
   if (req.method === "GET" && pathname === "/") {
@@ -48,7 +63,7 @@ const server = Deno.serve({ port: 9091 }, (req) => {
     const name = decodeURIComponent(runMatch[1]);
     const probe = probes.find((p) => p.name === name);
     if (!probe) return new Response("Not Found", { status: 404 });
-    console.log(`[admin] manual trigger: ${name}`);
+    log({ event: "admin.trigger", probe: name });
     runProbe(probe); // fire-and-forget
     return Response.redirect(new URL("/", req.url), 303);
   }
@@ -58,7 +73,7 @@ const server = Deno.serve({ port: 9091 }, (req) => {
   if (req.method === "POST" && pauseMatch) {
     const name = decodeURIComponent(pauseMatch[1]);
     setPaused(name, true);
-    console.log(`[admin] probe PAUSED: ${name}`);
+    log({ event: "admin.paused", probe: name });
     return Response.redirect(new URL("/", req.url), 303);
   }
 
@@ -67,13 +82,13 @@ const server = Deno.serve({ port: 9091 }, (req) => {
   if (req.method === "POST" && resumeMatch) {
     const name = decodeURIComponent(resumeMatch[1]);
     setPaused(name, false);
-    console.log(`[admin] probe RESUMED: ${name}`);
+    log({ event: "admin.resumed", probe: name });
     return Response.redirect(new URL("/", req.url), 303);
   }
 
   return new Response("Not Found", { status: 404 });
 });
 
-console.log("reops-health-probe started — dashboard on :9091/");
+log({ event: "server.started", port: 9091 });
 
 await server.finished;

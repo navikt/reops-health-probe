@@ -1,5 +1,8 @@
 import { bqQuery } from "../lib/bigquery.ts";
-import type { Probe, ProbeResult } from "../lib/runner.ts";
+import { log, logError } from "../lib/log.ts";
+import type { Probe, ProbeContext, ProbeResult } from "../lib/runner.ts";
+
+const schedule = { second: { every: 12 } };
 
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
@@ -7,7 +10,7 @@ const BQ_PROJECT = "team-researchops-dev-4396";
 const BQ_DATASET = "custom_umami_views";
 const BQ_VIEW = "custom_umami_view_event_data";
 
-const WAIT_MS = 48 * 60 * 1000; // 48 minutes
+const WAIT_MS = 1 * 60 * 1000; // 48 minutes
 
 const INGRESS_PAYLOAD = (probeId: string) => ({
   type: "event",
@@ -75,17 +78,20 @@ async function checkBigQuery(
 
 export const innblikkPipelineProbe: Probe = {
   name: "innblikk-pipeline",
-  schedule: { minute: { every: 12 } },
+  schedule,
+  intervalMs: 12_000,
 
-  async run(): Promise<ProbeResult> {
+  async run({ runId }: ProbeContext): Promise<ProbeResult> {
     const probeId = crypto.randomUUID();
     const start = Date.now();
 
     const ingress = await sendProbeEvent(probeId);
 
     if (ingress.statusCode < 200 || ingress.statusCode >= 300) {
+      logError({ event: "probe.ingress_failed", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, status_code: ingress.statusCode });
       return {
         ok: false,
+        probeId,
         message: `Ingress returned HTTP ${ingress.statusCode}`,
         errorDetails: `POST ${INGRESS_URL}/api/send\nPayload: ${JSON.stringify(INGRESS_PAYLOAD(probeId), null, 2)}\n\nResponse (${ingress.statusCode}):\n${ingress.body}`,
         durationMs: Date.now() - start,
@@ -93,17 +99,17 @@ export const innblikkPipelineProbe: Probe = {
       };
     }
 
-    console.log(
-      `[innblikk-pipeline] probe sent (id=${probeId}), waiting ${WAIT_MS / 1000}s for BQ...`,
-    );
+    log({ event: "probe.sent", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, wait_ms: WAIT_MS });
     await new Promise((resolve) => setTimeout(resolve, WAIT_MS));
 
     const found = await checkBigQuery(probeId, start);
     const durationMs = Date.now() - start;
 
     if (!found) {
+      logError({ event: "probe.not_found", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, duration_ms: durationMs });
       return {
         ok: false,
+        probeId,
         message: `Probe event not found in BigQuery after ${WAIT_MS / 60000} minutes`,
         errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}\nIngress status: ${ingress.statusCode}\nIngress response: ${ingress.body}`,
         durationMs,
@@ -111,6 +117,7 @@ export const innblikkPipelineProbe: Probe = {
       };
     }
 
-    return { ok: true, durationMs, ingressStatusCode: ingress.statusCode };
+    log({ event: "probe.found", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, duration_ms: durationMs });
+    return { ok: true, probeId, durationMs, ingressStatusCode: ingress.statusCode };
   },
 };

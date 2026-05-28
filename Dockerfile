@@ -8,6 +8,9 @@ WORKDIR /app
 COPY deno.json deno.lock* ./
 COPY src/ ./src/
 
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 RUN deno cache src/main.ts
 
 USER deno

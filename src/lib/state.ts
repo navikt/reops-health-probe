@@ -5,20 +5,25 @@ export interface ProbeRun {
   result: ProbeResult;
 }
 
+export interface ActiveRun {
+  id: number;
+  startedAt: number; // unix ms
+}
+
 export interface ProbeState {
   paused: boolean;
-  running: boolean;
-  runStartedAt?: number; // unix ms, set when running
+  activeRuns: ActiveRun[]; // one entry per concurrent in-flight run
   history: ProbeRun[]; // newest first, capped at MAX_HISTORY
 }
 
-const MAX_HISTORY = 20;
+const MAX_HISTORY = 40;
+let nextRunId = 0;
 
 const probeStates = new Map<string, ProbeState>();
 
 function getOrCreate(name: string): ProbeState {
   if (!probeStates.has(name)) {
-    probeStates.set(name, { paused: false, running: false, history: [] });
+    probeStates.set(name, { paused: false, activeRuns: [], history: [] });
   }
   return probeStates.get(name)!;
 }
@@ -31,20 +36,23 @@ export function setPaused(name: string, paused: boolean): void {
   getOrCreate(name).paused = paused;
 }
 
-export function recordRun(name: string, result: ProbeResult): void {
+export function recordRun(
+  name: string,
+  runId: number,
+  result: ProbeResult,
+): void {
   const state = getOrCreate(name);
-  state.running = false;
-  state.runStartedAt = undefined;
+  state.activeRuns = state.activeRuns.filter((r) => r.id !== runId);
   state.history.unshift({ timestamp: Date.now(), result });
   if (state.history.length > MAX_HISTORY) {
     state.history.length = MAX_HISTORY;
   }
 }
 
-export function setRunning(name: string, running: boolean): void {
-  const state = getOrCreate(name);
-  state.running = running;
-  state.runStartedAt = running ? Date.now() : undefined;
+export function setRunning(name: string): number {
+  const id = nextRunId++;
+  getOrCreate(name).activeRuns.push({ id, startedAt: Date.now() });
+  return id;
 }
 
 export function getProbeState(name: string): ProbeState {
