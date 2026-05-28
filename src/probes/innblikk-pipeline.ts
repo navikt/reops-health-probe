@@ -2,15 +2,15 @@ import { bqQuery } from "../lib/bigquery.ts";
 import { log, logError } from "../lib/log.ts";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner.ts";
 
-const schedule = { second: { every: 12 } };
+const schedule = { minute: { every: 5 } };
+
+const WAIT_MS = 1 * 60 * 1000; // 48 minutes
 
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
 const BQ_PROJECT = "team-researchops-dev-4396";
 const BQ_DATASET = "custom_umami_views";
 const BQ_VIEW = "custom_umami_view_event_data";
-
-const WAIT_MS = 1 * 60 * 1000; // 48 minutes
 
 const INGRESS_PAYLOAD = (probeId: string) => ({
   type: "event",
@@ -88,7 +88,13 @@ export const innblikkPipelineProbe: Probe = {
     const ingress = await sendProbeEvent(probeId);
 
     if (ingress.statusCode < 200 || ingress.statusCode >= 300) {
-      logError({ event: "probe.ingress_failed", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, status_code: ingress.statusCode });
+      logError({
+        event: "probe.ingress_failed",
+        probe: "innblikk-pipeline",
+        run_id: runId,
+        probe_id: probeId,
+        status_code: ingress.statusCode,
+      });
       return {
         ok: false,
         probeId,
@@ -99,14 +105,26 @@ export const innblikkPipelineProbe: Probe = {
       };
     }
 
-    log({ event: "probe.sent", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, wait_ms: WAIT_MS });
+    log({
+      event: "probe.sent",
+      probe: "innblikk-pipeline",
+      run_id: runId,
+      probe_id: probeId,
+      wait_ms: WAIT_MS,
+    });
     await new Promise((resolve) => setTimeout(resolve, WAIT_MS));
 
     const found = await checkBigQuery(probeId, start);
     const durationMs = Date.now() - start;
 
     if (!found) {
-      logError({ event: "probe.not_found", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, duration_ms: durationMs });
+      logError({
+        event: "probe.not_found",
+        probe: "innblikk-pipeline",
+        run_id: runId,
+        probe_id: probeId,
+        duration_ms: durationMs,
+      });
       return {
         ok: false,
         probeId,
@@ -117,7 +135,18 @@ export const innblikkPipelineProbe: Probe = {
       };
     }
 
-    log({ event: "probe.found", probe: "innblikk-pipeline", run_id: runId, probe_id: probeId, duration_ms: durationMs });
-    return { ok: true, probeId, durationMs, ingressStatusCode: ingress.statusCode };
+    log({
+      event: "probe.found",
+      probe: "innblikk-pipeline",
+      run_id: runId,
+      probe_id: probeId,
+      duration_ms: durationMs,
+    });
+    return {
+      ok: true,
+      probeId,
+      durationMs,
+      ingressStatusCode: ingress.statusCode,
+    };
   },
 };
