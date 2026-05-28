@@ -28,9 +28,7 @@ export interface ProbeContext {
   signal: AbortSignal;
 }
 
-export type ProbeSchedule =
-  | { type: "cron"; value: Deno.CronSchedule }
-  | { type: "interval"; ms: number };
+export type ProbeSchedule = { type: "interval"; ms: number };
 
 export interface Probe {
   name: string;
@@ -41,12 +39,7 @@ export interface Probe {
 const failingProbes = new Set<string>();
 
 export function startProbe(probe: Probe): void {
-  const trigger = () => runProbe(probe);
-  if (probe.schedule.type === "cron") {
-    Deno.cron(`probe-${probe.name}`, probe.schedule.value, trigger);
-  } else {
-    setInterval(trigger, probe.schedule.ms);
-  }
+  setInterval(() => runProbe(probe), probe.schedule.ms);
 }
 
 export async function runProbe(probe: Probe): Promise<void> {

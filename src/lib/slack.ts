@@ -23,7 +23,10 @@ const throttleMap = new Map<string, ThrottleState>();
 
 function getThrottle(probe: string): ThrottleState {
   if (!throttleMap.has(probe)) {
-    throttleMap.set(probe, { transitionTimestamps: [], throttleNoticeSent: false });
+    throttleMap.set(probe, {
+      transitionTimestamps: [],
+      throttleNoticeSent: false,
+    });
   }
   return throttleMap.get(probe)!;
 }
@@ -32,7 +35,9 @@ function getThrottle(probe: string): ThrottleState {
  * Called on ok→fail transition.
  * Returns "send" | "throttled" | "suppress".
  */
-function recordFailureTransition(probe: string): "send" | "throttled" | "suppress" {
+function recordFailureTransition(
+  probe: string,
+): "send" | "throttled" | "suppress" {
   const now = Date.now();
   const state = getThrottle(probe);
 
@@ -52,7 +57,10 @@ function recordFailureTransition(probe: string): "send" | "throttled" | "suppres
 
 /** Called on fail→ok recovery. Resets throttle for the probe. */
 function recordRecovery(probe: string): void {
-  throttleMap.set(probe, { transitionTimestamps: [], throttleNoticeSent: false });
+  throttleMap.set(probe, {
+    transitionTimestamps: [],
+    throttleNoticeSent: false,
+  });
 }
 
 function envEmoji(): string {
@@ -81,14 +89,24 @@ async function postToSlack(payload: unknown): Promise<void> {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      logError({ event: "slack.failed", status: res.status, body: await res.text() });
+      logError({
+        event: "slack.failed",
+        status: res.status,
+        body: await res.text(),
+      });
     }
   } catch (err) {
-    logError({ event: "slack.error", message: err instanceof Error ? err.message : String(err) });
+    logError({
+      event: "slack.error",
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
-export async function slackAlertFailing(probe: string, message: string): Promise<void> {
+export async function slackAlertFailing(
+  probe: string,
+  message: string,
+): Promise<void> {
   const decision = recordFailureTransition(probe);
 
   if (decision === "suppress") {
@@ -98,7 +116,9 @@ export async function slackAlertFailing(probe: string, message: string): Promise
 
   if (decision === "throttled") {
     getThrottle(probe).throttleNoticeSent = true;
-    const nextAlertAt = new Date(Date.now() + THROTTLE_WINDOW_MS).toLocaleTimeString("no-NO", {
+    const nextAlertAt = new Date(
+      Date.now() + THROTTLE_WINDOW_MS,
+    ).toLocaleTimeString("no-NO", {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: "Europe/Oslo",
@@ -113,8 +133,7 @@ export async function slackAlertFailing(probe: string, message: string): Promise
               type: "section",
               text: {
                 type: "mrkdwn",
-                text:
-                  `⏸️ *Alert throttled* — *${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\nWe know it's failing. Check the dashboard and look into it. Alerts will resume after *${nextAlertAt}*.`,
+                text: `⏸️ *Alert throttled* — *${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\nWe know it's failing. Check the dashboard and look into it. Alerts will resume after *${nextAlertAt}*.`,
               },
             },
             {

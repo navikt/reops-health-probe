@@ -310,7 +310,7 @@ export function renderDashboard(): string {
     <a href="/docs">Grafana docs</a>
   </nav>
   ${cards}
-  <p class="refresh-note"> build ${shaHtml}</p>
+  <p class="refresh-note"> build ${shaHtml} · <a href="https://api.slack.com/apps/A0B69D3JSQN" target="_blank" rel="noopener">Manage Slack webhook</a></p>
   <div id="tooltip" class="dot-popover" role="tooltip"></div>
   <script type="module">
     import { computePosition, flip, shift, offset } from 'https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.7.6/+esm';
@@ -673,7 +673,7 @@ export function renderDocs(): string {
   <p>See <a href="https://github.com/navikt/reops-health-probe" target="_blank">README</a> for the full guide. Summary:</p>
   <ul>
     <li>Create <code>src/probes/&lt;name&gt;.ts</code> exporting a <code>Probe</code> object</li>
-    <li>Register it in <code>src/main.ts</code> with <code>Deno.cron</code> + <code>registerProbe</code></li>
+    <li>Register it in <code>src/main.ts</code> with <code>startProbe</code> + <code>registerProbe</code></li>
     <li>It will appear automatically on the dashboard and in metrics</li>
   </ul>
 </body>

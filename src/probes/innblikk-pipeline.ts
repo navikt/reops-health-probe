@@ -3,8 +3,6 @@ import { bqQuery } from "../lib/bigquery.ts";
 import { log, logError } from "../lib/log.ts";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner.ts";
 
-// Runs every 12 minutes. Deno.cron skips ticks that overlap a still-running
-// invocation, so concurrent in-flight runs cannot accumulate.
 const WAIT_MS = 5 * 60 * 1000;
 
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
@@ -73,7 +71,7 @@ async function checkBigQuery(
 
 export const innblikkPipelineProbe: Probe = {
   name: "innblikk-pipeline",
-  schedule: { type: "cron", value: { minute: { every: 12 } } },
+  schedule: { type: "interval", ms: 30_000 },
 
   async run({ runId, signal }: ProbeContext): Promise<ProbeResult> {
     const probeId = crypto.randomUUID();
@@ -109,7 +107,14 @@ export const innblikkPipelineProbe: Probe = {
     });
     await new Promise<void>((resolve, reject) => {
       const t = setTimeout(resolve, WAIT_MS);
-      signal.addEventListener("abort", () => { clearTimeout(t); reject(signal.reason); }, { once: true });
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(t);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
     });
 
     const bq = await checkBigQuery(probeId, start);
