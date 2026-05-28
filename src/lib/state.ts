@@ -20,6 +20,7 @@ const MAX_HISTORY = 1000;
 let nextRunId = 0;
 
 const probeStates = new Map<string, ProbeState>();
+const probeSchedules = new Map<string, number>(); // intervalMs
 /** AbortControllers for in-flight runs, keyed by runId. */
 const runControllers = new Map<number, AbortController>();
 
@@ -76,6 +77,11 @@ export function getAllProbeNames(): string[] {
 }
 
 /** Called at startup to ensure probe entries exist before first run */
-export function registerProbe(name: string): void {
+export function registerProbe(name: string, scheduleMs?: number): void {
   getOrCreate(name);
+  if (scheduleMs != null) probeSchedules.set(name, scheduleMs);
+}
+
+export function getProbeScheduleMs(name: string): number | undefined {
+  return probeSchedules.get(name);
 }

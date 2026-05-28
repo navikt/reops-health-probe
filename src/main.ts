@@ -9,7 +9,7 @@ import { innblikkPipelineProbe } from "./probes/innblikk-pipeline.ts";
 const probes = [innblikkPipelineProbe];
 
 for (const probe of probes) {
-  registerProbe(probe.name);
+  registerProbe(probe.name, probe.schedule.ms);
   startProbe(probe);
 }
 

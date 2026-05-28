@@ -1,7 +1,7 @@
-import { getAllProbeNames, getProbeState } from "./state.ts";
+import { getAllProbeNames, getProbeScheduleMs, getProbeState } from "./state.ts";
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function formatDuration(ms: number): string {
@@ -20,6 +20,15 @@ function relativeTime(ts: number): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatInterval(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${ms / 1000}s`;
+  if (ms % 60_000 === 0) return `${ms / 60_000}m`;
+  const mins = Math.floor(ms / 60_000);
+  const secs = (ms % 60_000) / 1000;
+  return `${mins}m ${secs}s`;
 }
 
 function cardClass(
@@ -85,6 +94,11 @@ function probeCard(name: string): string {
   const historyDots = completedDots + runningDots;
   const runningInfo = "";
 
+  const scheduleMs = getProbeScheduleMs(name);
+  const scheduleInfo = scheduleMs != null
+    ? `<div class="meta">Scheduled every <strong>${formatInterval(scheduleMs)}</strong></div>`
+    : "";
+
   const lastRunInfo = latest
     ? `<div class="meta">Last run: <strong>${relativeTime(latest.timestamp)}</strong> · ${formatTimestamp(latest.timestamp)} · Duration: <strong>${formatDuration(latest.result.durationMs)}</strong> · Ingress: <strong>${latest.result.ingressStatusCode}</strong></div>`
     : `<div class="meta">No runs recorded yet.</div>`;
@@ -117,6 +131,7 @@ function probeCard(name: string): string {
     </div>
     <div id="fail-msg-${name}">${failMsg}</div>
     <div id="last-run-${name}">${lastRunInfo}</div>
+    ${scheduleInfo}
     <div class="history-label">Last ${totalHistory} runs:</div>
     <div id="history-dots-${name}" class="history-dots">${historyDots || '<span class="meta">—</span>'}</div>
   </div>`;
@@ -354,6 +369,7 @@ export function renderDashboard(): string {
       tooltip.classList.add('is-visible');
       computePosition(dot, tooltip, {
         placement: 'top',
+        strategy: 'absolute',
         middleware: [offset(6), flip(), shift({ padding: 8 })],
       }).then(({ x, y }) => {
         Object.assign(tooltip.style, { left: x + 'px', top: y + 'px', position: 'absolute' });
@@ -510,6 +526,7 @@ export function renderDashboard(): string {
             }
           }
           for (let i = activeRuns.length; i < existingRunning.length; i++) {
+            if (pinned === existingRunning[i] || hovered === existingRunning[i]) hideTooltip();
             existingRunning[i].remove();
           }
 
