@@ -2,9 +2,9 @@ import { bqQuery } from "../lib/bigquery.ts";
 import { log, logError } from "../lib/log.ts";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner.ts";
 
-const schedule = { minute: { every: 5 } };
+const schedule = { minute: { every: 1 } };
 
-const WAIT_MS = 1 * 60 * 1000; // 48 minutes
+const WAIT_MS = 5 * 60 * 1000; // 48 minutes
 
 const INGRESS_URL = "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = "96a8b610-7391-45f5-9253-84bee2333669";
