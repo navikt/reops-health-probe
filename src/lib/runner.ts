@@ -36,7 +36,22 @@ export interface Probe {
   run(ctx: ProbeContext): Promise<ProbeResult>;
 }
 
-const failingProbes = new Set<string>();
+/** Number of consecutive failures required before a Slack alert fires. */
+const CONSECUTIVE_FAILURES_THRESHOLD = 3;
+
+/**
+ * Tracks per-probe alert state:
+ * - consecutiveFailures: how many failures in a row (resets on success)
+ * - alertSent: whether we've already fired a failing alert for this streak
+ */
+const probeAlertState = new Map<string, { consecutiveFailures: number; alertSent: boolean }>();
+
+function getAlertState(name: string) {
+  if (!probeAlertState.has(name)) {
+    probeAlertState.set(name, { consecutiveFailures: 0, alertSent: false });
+  }
+  return probeAlertState.get(name)!;
+}
 
 export function startProbe(probe: Probe): void {
   setInterval(() => runProbe(probe), probe.schedule.ms);
@@ -86,18 +101,31 @@ export async function runProbe(probe: Probe): Promise<void> {
     ingressStatusCode: result.ingressStatusCode,
   });
 
-  const wasFailing = failingProbes.has(probe.name);
+  const alertState = getAlertState(probe.name);
 
   if (!result.ok) {
-    failingProbes.add(probe.name);
+    alertState.consecutiveFailures++;
     const msg = result.message ?? "unknown error";
-    logError({ event: "probe.failed", probe: probe.name, run_id: runId, duration_ms: result.durationMs, message: msg });
-    await slackAlertFailing(probe.name, msg);
-  } else if (wasFailing) {
-    failingProbes.delete(probe.name);
+    logError({
+      event: "probe.failed",
+      probe: probe.name,
+      run_id: runId,
+      duration_ms: result.durationMs,
+      message: msg,
+      consecutive_failures: alertState.consecutiveFailures,
+    });
+    if (alertState.consecutiveFailures >= CONSECUTIVE_FAILURES_THRESHOLD && !alertState.alertSent) {
+      alertState.alertSent = true;
+      await slackAlertFailing(probe.name, msg);
+    }
+  } else if (alertState.alertSent) {
+    // Was alerting — now recovered
+    alertState.consecutiveFailures = 0;
+    alertState.alertSent = false;
     log({ event: "probe.recovered", probe: probe.name, run_id: runId, duration_ms: result.durationMs });
     await slackAlertRecovered(probe.name);
   } else {
+    alertState.consecutiveFailures = 0;
     log({ event: "probe.ok", probe: probe.name, run_id: runId, duration_ms: result.durationMs });
   }
 }

@@ -63,13 +63,6 @@ function recordRecovery(probe: string): void {
   });
 }
 
-function envEmoji(): string {
-  const e = environment.toLowerCase();
-  if (e === "prod" || e === "production") return "🔴";
-  if (e === "dev" || e === "development") return "🟡";
-  return "⚪";
-}
-
 function envLabel(): string {
   const e = environment.toLowerCase();
   if (e === "prod" || e === "production") return "PROD";
@@ -141,7 +134,7 @@ export async function slackAlertFailing(
               elements: [
                 {
                   type: "mrkdwn",
-                  text: `${envEmoji()} *${envLabel()}* environment  ·  <${PROBE_UI_URL}|See probe dashboard & pause if needed>`,
+                  text: `*${envLabel()}* environment  ·  <${PROBE_UI_URL}|See probe dashboard & pause if needed>`,
                 },
               ],
             },
@@ -176,7 +169,7 @@ export async function slackAlertFailing(
               },
               {
                 type: "mrkdwn",
-                text: `*Environment*\n${envEmoji()} ${envLabel()}`,
+                text: `*Environment*\n${envLabel()}`,
               },
             ],
           },
@@ -230,7 +223,7 @@ export async function slackAlertRecovered(probe: string): Promise<void> {
               },
               {
                 type: "mrkdwn",
-                text: `*Environment*\n${envEmoji()} ${envLabel()}`,
+                text: `*Environment*\n${envLabel()}`,
               },
             ],
           },

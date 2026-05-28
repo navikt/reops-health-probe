@@ -179,15 +179,15 @@ export function renderDashboard(): string {
       : `<a href="https://github.com/navikt/reops-health-probe/commit/${sha}" target="_blank" rel="noopener">${shortSha}</a>`;
 
   const env = (Deno.env.get("ENVIRONMENT") ?? "").toLowerCase();
-  const envDisplay = env === "prod" || env === "production"
-    ? { label: "PROD", cls: "env-chip-prod", dot: "🔴" }
+  const envLabel = env === "prod" || env === "production"
+    ? "PROD"
     : env === "dev" || env === "development"
-    ? { label: "DEV", cls: "env-chip-dev", dot: "🟡" }
+    ? "DEV"
     : env
-    ? { label: env.toUpperCase(), cls: "env-chip-unknown", dot: "⚪" }
+    ? env.toUpperCase()
     : null;
-  const envChipHtml = envDisplay
-    ? `<span class="env-chip ${envDisplay.cls}" title="Environment: ${envDisplay.label}">${envDisplay.dot} ${envDisplay.label}</span>`
+  const envChipHtml = envLabel
+    ? `<span class="env-chip" title="Environment: ${envLabel}">${envLabel}</span>`
     : ``;
 
 
@@ -291,10 +291,7 @@ export function renderDashboard(): string {
     .btn-resume { background: #1c4532; color: #68d391; }
     .btn-resume:hover { background: #276749; }
     .refresh-note { font-size: 0.75rem; color: #4a5568; margin-top: 2rem; }
-    .env-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.7rem; border-radius: 999px; border: 1.5px solid; }
-    .env-chip-prod { background: #3b0a0a; color: #fc8181; border-color: #742a2a; }
-    .env-chip-dev { background: #2d2600; color: #f6e05e; border-color: #975a16; }
-    .env-chip-unknown { background: #1a1f2e; color: #718096; border-color: #4a5568; }
+    .env-chip { display: inline-flex; align-items: center; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.7rem; border-radius: 999px; border: 1.5px solid #4a5568; background: #1a1f2e; color: #a0aec0; }
   </style>
 </head>
 <body>
