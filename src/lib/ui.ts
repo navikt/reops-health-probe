@@ -111,7 +111,6 @@ function probeCard(name: string): string {
       <button class="kebab-item" role="menuitem" data-test-type="recovery" data-probe="${escapeHtml(name)}">✅ Simulate recovery</button>
       <button class="kebab-item" role="menuitem" data-test-type="throttle" data-probe="${escapeHtml(name)}">⏸️ Simulate throttle</button>
     </div>
-    <output class="test-feedback" aria-live="polite"></output>
   </div>`;
 
   const runBtn = `<form method="POST" action="/admin/run/${encodeURIComponent(name)}"><button class="btn btn-run">⚡ Run now</button></form>`;
@@ -138,7 +137,7 @@ function probeCard(name: string): string {
         <code>${name}</code>
         <span id="badge-${name}">${statusLabel}</span>
       </div>
-      <div class="card-actions">${runBtn}${pauseBtn}${testMenuBtn}</div>
+      <div class="card-actions"><output class="test-feedback" aria-live="polite"></output>${testMenuBtn}${runBtn}${pauseBtn}</div>
     </div>
     <div id="fail-msg-${name}">${failMsg}</div>
     <div id="last-run-${name}">${lastRunInfo}</div>
@@ -324,7 +323,7 @@ export function renderDashboard(): string {
     .kebab-item { display: block; width: 100%; text-align: left; background: none; border: none; color: #e2e8f0; font-size: 0.8rem; font-weight: 500; padding: 0.45rem 0.75rem; border-radius: 0.3rem; cursor: pointer; }
     .kebab-item:hover, .kebab-item:focus { background: #2d3748; outline: none; }
     .kebab-item:focus-visible { outline: 2px solid #63b3ed; outline-offset: -2px; }
-    .test-feedback { font-size: 0.75rem; color: #68d391; white-space: nowrap; min-width: 0; }
+    .test-feedback { font-size: 0.75rem; color: #68d391; white-space: nowrap; min-width: 7rem; visibility: hidden; }
     .refresh-note { font-size: 0.75rem; color: #4a5568; margin-top: 2rem; }
     .env-chip { display: inline-flex; align-items: center; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.7rem; border-radius: 999px; border: 1.5px solid #4a5568; background: #1a1f2e; color: #a0aec0; }
   </style>
@@ -457,20 +456,22 @@ export function renderDashboard(): string {
         const probe = item.dataset.probe;
         const type  = item.dataset.testType;
         const wrap  = item.closest('.kebab-wrap');
-        const out   = wrap?.querySelector('output');
+        const out   = item.closest('.card-actions')?.querySelector('output');
         closeAllKebabs();
         try {
           const res = await fetch(\`/admin/test-alert/\${encodeURIComponent(probe)}/\${type}\`, { method: 'POST' });
           if (out) {
             out.textContent = res.ok ? '✓ Sent to Slack' : '✗ Failed';
             out.style.color = res.ok ? '#68d391' : '#fc8181';
-            setTimeout(() => { out.textContent = ''; }, 2500);
+            out.style.visibility = 'visible';
+            setTimeout(() => { out.style.visibility = 'hidden'; }, 2500);
           }
         } catch {
           if (out) {
             out.textContent = '✗ Network error';
             out.style.color = '#fc8181';
-            setTimeout(() => { out.textContent = ''; }, 2500);
+            out.style.visibility = 'visible';
+            setTimeout(() => { out.style.visibility = 'hidden'; }, 2500);
           }
         }
       });
