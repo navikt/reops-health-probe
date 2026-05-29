@@ -18,8 +18,8 @@ const WEBSITE_ID = isProd
 const BQ_PROJECT = isProd
   ? "team-researchops-prod-01d6"
   : "team-researchops-dev-4396";
-const BQ_DATASET = "custom_umami_views";
-const BQ_VIEW = "custom_umami_view_event_data";
+const BQ_DATASET = isProd ? "custom_umami_views" : "umami_views";
+const BQ_VIEW = isProd ? "custom_umami_view_event_data" : "event_data";
 
 const INGRESS_PAYLOAD = (probeId: string) => ({
   type: "event",
