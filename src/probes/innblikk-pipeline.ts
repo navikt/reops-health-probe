@@ -13,7 +13,7 @@ const INGRESS_URL = isProd
   ? "https://reops-event-proxy.nav.no"
   : "https://reops-event-proxy.ekstern.dev.nav.no";
 const WEBSITE_ID = isProd
-  ? "773df94f-7025-432b-a010-ffe1e9246e27"
+  ? "8f25f313-f86f-44fa-aef3-0b0dc1fc480a"
   : "96a8b610-7391-45f5-9253-84bee2333669";
 const BQ_PROJECT = isProd
   ? "team-researchops-prod-01d6"
