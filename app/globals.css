@@ -197,6 +197,11 @@ nav {
   }
 }
 .dot-running {
+  /* Inherits .dot: width/height 10px, padding 7px, box-sizing content-box */
+  /* Total box = 24px. Draw the worm border on the 10px content area. */
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
   background: transparent;
   border: 1.5px solid transparent;
   background-image:
