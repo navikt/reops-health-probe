@@ -31,6 +31,8 @@ RUN pnpm build
 FROM base AS runner
 WORKDIR /app
 
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
