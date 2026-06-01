@@ -3,7 +3,7 @@ import { bqQuery } from "../lib/bigquery";
 import { log, logError } from "../lib/log";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 
-const WAIT_MS = 5 * 60 * 1000;
+const WAIT_MS = 10 * 60 * 1000;
 
 const isProd = ["prod", "production"].includes(
   (process.env.ENVIRONMENT ?? "").toLowerCase(),
