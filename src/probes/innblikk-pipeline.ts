@@ -3,7 +3,10 @@ import { bqQuery } from "../lib/bigquery";
 import { log, logError } from "../lib/log";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 
-const WAIT_MS = 10 * 60 * 1000;
+// Exponential backoff delays between BQ polling attempts (in ms).
+// Sequence: 30s, 60s, 120s, 240s, 480s, 960s → cumulative max ~31.5 min.
+// If all attempts are exhausted without finding the event, the probe fails.
+const BQ_POLL_DELAYS_MS = [30, 60, 120, 240, 480, 960].map((s) => s * 1000);
 
 const isProd = ["prod", "production"].includes(
   (process.env.ENVIRONMENT ?? "").toLowerCase(),
@@ -107,62 +110,96 @@ export const innblikkPipelineProbe: Probe = {
     // Ingress accepted — probeId is now known, surface it on the running dot
     setProbeId(probeId);
 
+    const totalMaxMs = BQ_POLL_DELAYS_MS.reduce((a, b) => a + b, 0);
     log({
       event: "probe.sent",
       probe: "innblikk-pipeline",
       run_id: runId,
       probe_id: probeId,
-      wait_ms: WAIT_MS,
-    });
-    await new Promise<void>((resolve, reject) => {
-      const t = setTimeout(resolve, WAIT_MS);
-      signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(t);
-          reject(signal.reason);
-        },
-        { once: true },
-      );
+      attempts: BQ_POLL_DELAYS_MS.length,
+      max_wait_ms: totalMaxMs,
     });
 
-    const bq = await checkBigQuery(probeId, start);
-    const durationMs = Date.now() - start;
+    let lastBq: Awaited<ReturnType<typeof checkBigQuery>> | null = null;
 
-    if (!bq.found) {
-      logError({
-        event: "probe.not_found",
+    for (let attempt = 0; attempt < BQ_POLL_DELAYS_MS.length; attempt++) {
+      const delayMs = BQ_POLL_DELAYS_MS[attempt];
+
+      log({
+        event: "probe.bq_wait",
         probe: "innblikk-pipeline",
         run_id: runId,
         probe_id: probeId,
+        attempt,
+        delay_ms: delayMs,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, delayMs);
+        signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            reject(signal.reason);
+          },
+          { once: true },
+        );
+      });
+
+      lastBq = await checkBigQuery(probeId, start);
+      const durationMs = Date.now() - start;
+
+      if (lastBq.found) {
+        log({
+          event: "probe.found",
+          probe: "innblikk-pipeline",
+          run_id: runId,
+          probe_id: probeId,
+          attempt,
+          duration_ms: durationMs,
+        });
+        return {
+          ok: true,
+          probeId,
+          ingressDetails: ingress.requestSummary,
+          bqDetails: lastBq.requestSummary,
+          bqQuery: lastBq.query,
+          durationMs,
+          retries: attempt,
+        };
+      }
+
+      logError({
+        event: "probe.bq_not_found_yet",
+        probe: "innblikk-pipeline",
+        run_id: runId,
+        probe_id: probeId,
+        attempt,
         duration_ms: durationMs,
       });
-      return {
-        ok: false,
-        probeId,
-        message: `Probe event not found in BigQuery after ${WAIT_MS / 60000} minutes`,
-        errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}`,
-        ingressDetails: ingress.requestSummary,
-        bqDetails: bq.requestSummary,
-        bqQuery: bq.query,
-        durationMs,
-      };
     }
 
-    log({
-      event: "probe.found",
+    // All attempts exhausted
+    const durationMs = Date.now() - start;
+    const totalWaitMin = Math.round(totalMaxMs / 60000);
+    logError({
+      event: "probe.not_found",
       probe: "innblikk-pipeline",
       run_id: runId,
       probe_id: probeId,
       duration_ms: durationMs,
+      attempts: BQ_POLL_DELAYS_MS.length,
     });
     return {
-      ok: true,
+      ok: false,
       probeId,
+      message: `Probe event not found in BigQuery after ${BQ_POLL_DELAYS_MS.length} attempts (~${totalWaitMin} min)`,
+      errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}`,
       ingressDetails: ingress.requestSummary,
-      bqDetails: bq.requestSummary,
-      bqQuery: bq.query,
+      bqDetails: lastBq?.requestSummary,
+      bqQuery: lastBq?.query,
       durationMs,
+      retries: BQ_POLL_DELAYS_MS.length,
     };
   },
 };

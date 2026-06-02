@@ -8,6 +8,8 @@ export interface RunData {
   bqDetails: string | null;
   bqQuery: string | null;
   durationMs: number;
+  /** BQ polling retries. 0 = found on first attempt. >0 = slow (yellowish dot). */
+  retries: number;
 }
 
 export interface ProbeStateData {

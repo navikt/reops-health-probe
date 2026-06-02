@@ -88,6 +88,10 @@ nav {
   border-color: var(--ax-border-warning);
   background: var(--ax-bg-warning-soft);
 }
+.card-warn {
+  border-color: #7fbf3f;
+  background: color-mix(in srgb, var(--ax-bg-success-soft) 60%, var(--ax-bg-warning-soft) 40%);
+}
 .card-fail {
   border-color: var(--ax-border-danger);
   background: var(--ax-bg-danger-soft);
@@ -181,6 +185,13 @@ nav {
 .dot-ok {
   background: var(--ax-bg-success-strong);
 }
+.dot-warn {
+  /* Yellowish-green: success but with retries. Mix of success and warning hues. */
+  background: #7fbf3f;
+}
+.dark .dot-warn {
+  background: #8fcc44;
+}
 .dot-fail {
   background: var(--ax-bg-danger-strong);
 }
@@ -241,6 +252,12 @@ nav {
 }
 .dot-popover-status.ok {
   color: var(--ax-text-success);
+}
+.dot-popover-status.warn {
+  color: #5a9020;
+}
+.dark .dot-popover-status.warn {
+  color: #8fcc44;
 }
 .dot-popover-status.fail {
   color: var(--ax-text-danger);

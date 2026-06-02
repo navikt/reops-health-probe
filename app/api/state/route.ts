@@ -25,6 +25,7 @@ export function GET() {
         bqDetails: run.result.bqDetails ?? null,
         bqQuery: run.result.bqQuery ?? null,
         durationMs: run.result.durationMs,
+        retries: run.result.retries ?? 0,
       })),
       latest: latest
         ? {
@@ -37,6 +38,7 @@ export function GET() {
             bqDetails: latest.result.bqDetails ?? null,
             bqQuery: latest.result.bqQuery ?? null,
             durationMs: latest.result.durationMs,
+            retries: latest.result.retries ?? 0,
           }
         : null,
     };

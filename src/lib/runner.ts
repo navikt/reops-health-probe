@@ -17,6 +17,11 @@ export interface ProbeResult {
   /** The SQL query executed against BigQuery — for copy-paste debugging in the BQ console. */
   bqQuery?: string;
   durationMs: number;
+  /**
+   * Number of BQ polling retries before the probe succeeded (or exhausted attempts).
+   * 0 = found on first check. >0 = needed extra waits (yellowish success on dashboard).
+   */
+  retries?: number;
 }
 
 export interface ProbeContext {

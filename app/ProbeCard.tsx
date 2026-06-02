@@ -55,13 +55,21 @@ function DotPopoverContent({ run, inProgress }: { run: RunData; inProgress?: boo
     return () => clearInterval(id);
   }, [inProgress]);
 
-  const status = inProgress ? "IN PROGRESS" : run.ok ? "OK" : "FAILED";
-
   const statusCls = inProgress
     ? "dot-popover-status running"
+    : run.ok && run.retries > 0
+    ? "dot-popover-status warn"
     : run.ok
     ? "dot-popover-status ok"
     : "dot-popover-status fail";
+
+  const status = inProgress
+    ? "IN PROGRESS"
+    : run.ok && run.retries > 0
+    ? `OK (${run.retries} ${run.retries === 1 ? "retry" : "retries"})`
+    : run.ok
+    ? "OK"
+    : "FAILED";
 
   const durationLabel = !inProgress
     ? fmt(run.durationMs)
@@ -82,6 +90,12 @@ function DotPopoverContent({ run, inProgress }: { run: RunData; inProgress?: boo
             <Table.HeaderCell scope="row">Duration</Table.HeaderCell>
             <Table.DataCell>{durationLabel}</Table.DataCell>
           </Table.Row>
+          {!inProgress && run.retries > 0 && (
+            <Table.Row>
+              <Table.HeaderCell scope="row">BQ retries</Table.HeaderCell>
+              <Table.DataCell>{run.retries}</Table.DataCell>
+            </Table.Row>
+          )}
           <Table.Row>
             <Table.HeaderCell scope="row">Probe ID</Table.HeaderCell>
             <Table.DataCell>
@@ -130,6 +144,8 @@ function Dot({ run, inProgress }: { run: RunData; inProgress?: boolean }) {
 
   const cls = inProgress
     ? "dot dot-running"
+    : run.ok && run.retries > 0
+    ? "dot dot-warn"
     : run.ok
     ? "dot dot-ok"
     : "dot dot-fail";
@@ -257,12 +273,15 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
   if (paused) cardClass += " card-paused";
   else if (activeRuns.length > 0) cardClass += " card-running";
   else if (latest && !latest.ok) cardClass += " card-fail";
+  else if (latest && latest.ok && latest.retries > 0) cardClass += " card-warn";
 
   let badge: React.ReactNode = null;
   if (paused) {
     badge = <Tag variant="warning-moderate" size="small">PAUSED</Tag>;
   } else if (latest == null) {
     badge = null;
+  } else if (latest.ok && latest.retries > 0) {
+    badge = <Tag variant="warning-moderate" size="small">SLOW ({latest.retries}x)</Tag>;
   } else if (latest.ok) {
     badge = <Tag variant="success-moderate" size="small">OK</Tag>;
   } else {
@@ -281,6 +300,7 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
       bqDetails: null,
       bqQuery: null,
       durationMs: 0,
+      retries: 0,
     }),
   );
 
