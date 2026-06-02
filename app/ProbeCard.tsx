@@ -280,8 +280,6 @@ export function ProbeCard({ name, scheduleMs, state }: ProbeCardProps) {
     badge = <Tag variant="warning-moderate" size="small">PAUSED</Tag>;
   } else if (latest == null) {
     badge = null;
-  } else if (latest.ok && latest.retries > 0) {
-    badge = <Tag variant="warning-moderate" size="small">SLOW ({latest.retries}x)</Tag>;
   } else if (latest.ok) {
     badge = <Tag variant="success-moderate" size="small">OK</Tag>;
   } else {

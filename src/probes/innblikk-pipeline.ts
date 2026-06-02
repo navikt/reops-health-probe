@@ -4,9 +4,9 @@ import { log, logError } from "../lib/log";
 import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 
 // Exponential backoff delays between BQ polling attempts (in ms).
-// Sequence: 30s, 60s, 120s, 240s, 480s, 960s → cumulative max ~31.5 min.
+// Sequence: 5m, 5.5m, 6m, 7m, 10m, 15m, 30m → cumulative max ~78.5 min.
 // If all attempts are exhausted without finding the event, the probe fails.
-const BQ_POLL_DELAYS_MS = [30, 60, 120, 240, 480, 960].map((s) => s * 1000);
+const BQ_POLL_DELAYS_MS = [5, 5.5, 6, 7, 10, 15, 30].map((m) => m * 60 * 1000);
 
 const isProd = ["prod", "production"].includes(
   (process.env.ENVIRONMENT ?? "").toLowerCase(),
