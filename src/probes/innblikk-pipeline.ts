@@ -7,7 +7,7 @@ import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 // First wait is 5m (pipeline baseline), then shorter retries with gradual backoff.
 // Sequence: 5m, 30s, 30s, 60s, 3m, 5m, 5m → cumulative max ~20 min.
 // If all attempts are exhausted without finding the event, the probe fails.
-const BQ_POLL_DELAYS_MS = [5 * 60, 30, 30, 60, 3 * 60, 5 * 60, 5 * 60].map((s) => s * 1000);
+const BQ_POLL_DELAYS_MS = [5, 0.5, 0.5, 1, 3, 5, 5].map((m) => m * 1000 * 60);
 
 const isProd = ["prod", "production"].includes(
   (process.env.ENVIRONMENT ?? "").toLowerCase(),
