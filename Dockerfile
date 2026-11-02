@@ -32,7 +32,8 @@ ENV CI=true
 RUN pnpm build
 
 # ── Production image ──────────────────────────────────────────────────────────
-FROM cgr.dev/chainguard/node@sha256:c002402b355201714dfbeb3b1a7ca99152cccced4b334496db2442a3a9bf4883 AS runner
+FROM cgr.dev/chainguard/wolfi-base:latest AS runner
+RUN apk update && apk add --no-cache nodejs-26
 WORKDIR /usr/src/app
 
 ARG GIT_SHA=unknown
@@ -41,11 +42,13 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=builder /usr/src/app/public ./public
-COPY --from=builder --chown=node:node /usr/src/app/.next/standalone ./
-COPY --from=builder --chown=node:node /usr/src/app/.next/static ./.next/static
+COPY --from=builder --chown=65532:65532 /usr/src/app/.next/standalone ./
+COPY --from=builder --chown=65532:65532 /usr/src/app/.next/static ./.next/static
 
 EXPOSE 9091
 ENV PORT=9091
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["server.js"]
+USER 65532
+
+CMD ["node", "server.js"]
