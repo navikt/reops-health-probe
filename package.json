@@ -8,7 +8,8 @@
     "dev": "next dev -p 9091",
     "build": "next build",
     "start": "next start -p 9091",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "tsc --project tsconfig.test.json && node --test .test-build/tests/*.test.js"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",

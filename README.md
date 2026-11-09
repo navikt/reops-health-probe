@@ -1,6 +1,6 @@
 # reops-health-probe
 
-Next.js service that continuously runs probes against data pipelines and exposes results as Prometheus metrics. Sends Slack alerts on failure and recovery.
+Next.js service that continuously runs probes against data pipelines and exposes results as Prometheus metrics. Sends Slack alerts when delivery cannot be confirmed and when subsequent checks succeed.
 
 ## How it works
 
@@ -17,7 +17,7 @@ A -->|2. Verify probe arrived| C
 A -->|3. Alert if not found| D
 ```
 
-Each probe injects a uniquely identifiable event, waits for the pipeline to process it, then queries the destination to confirm it arrived. Alerts via Slack on failure — and again when it recovers.
+Each probe injects a uniquely identifiable event, waits for the pipeline to process it, then queries the destination to confirm it arrived. Slack alerts distinguish repeated unconfirmed checks from intermittent QoS concerns. An event not observed before verification ends may still arrive later; this does not prove event loss.
 
 ## Probes
 
@@ -48,7 +48,14 @@ Only one environment variable is required — probe-specific config lives in the
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
-Alerts use Slack Block Kit for rich formatting. Alerts fire only on state **transitions** (ok→fail, fail→ok). Failure alerts require 3 consecutive failures before firing. Throttle resets on recovery.
+Alerts use Slack Block Kit for rich formatting:
+
+- **Hard alert:** 3 consecutive checks unable to confirm delivery trigger an immediate alert, 24/7. A successful check sends a follow-up; this does not mean earlier unconfirmed events have been rechecked. Existing hard-alert throttling is unchanged.
+- **Soft warning — “Possible pipeline QoS degradation”:** at least 3 unconfirmed checks within the last 100 completed probes, even if successful checks occur between them. The window can contain fewer than 100 results during startup. Not observing an event in BigQuery within the probe's verification window does not confirm event loss: it may still arrive later. Warnings include the observation detail from the check that crossed the threshold, including the configured polling wait when BigQuery verification times out. Ingress/query errors also count as unconfirmed checks, with their actual error detail rather than a timeout claim.
+- Soft warnings are delivered only **Monday–Friday, 09:00–16:30 Europe/Oslo** (DST-aware; no public-holiday calendar). Outside these hours, warnings wait until the next working period. Delivery is checked every 30 seconds, even while probes are paused. If the threshold clears before delivery, the message reports that it is no longer met rather than implying an ongoing problem.
+- One soft warning per threshold crossing; rearmed once unconfirmed checks drop below 3 in the rolling window. Undelivered warnings are combined. Hard alerts cancel queued soft warnings and reset the soft window, avoiding duplicate notifications for the same incident. Soft warnings do not send recovery notifications or affect hard-alert throttling.
+
+The soft threshold and window size are defined in `src/lib/alert-policy.ts`. Windows use completion order, not elapsed time; paused/aborted runs do not count. Alert state and queued warnings are in memory and reset on process restart. Failed soft-warning deliveries are retried during working hours.
 
 Probe targets (URLs, project IDs, table names) are hardcoded in each probe file. To change them, edit the probe directly.
 
@@ -62,6 +69,9 @@ pnpm dev
 
 # Type-check
 pnpm check
+
+# Alert policy and runner tests (no external services)
+pnpm test
 ```
 
 ## Deployment

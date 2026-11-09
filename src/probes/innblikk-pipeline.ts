@@ -6,7 +6,8 @@ import type { Probe, ProbeContext, ProbeResult } from "../lib/runner";
 // BQ polling delays: wait this long before each attempt.
 // First wait is 5m (pipeline baseline), then shorter retries with gradual backoff.
 // Sequence: 5m, 30s, 30s, 60s, 3m, 5m, 5m → cumulative max ~20 min.
-// If all attempts are exhausted without finding the event, the probe fails.
+// Exhausting attempts means delivery was not confirmed within this window,
+// not that the event is permanently lost: it may still arrive later.
 const BQ_POLL_DELAYS_MS = [5, 0.5, 0.5, 1, 3, 5, 5].map((m) => m * 1000 * 60);
 
 const isProd = ["prod", "production"].includes(
@@ -194,7 +195,7 @@ export const innblikkPipelineProbe: Probe = {
     return {
       ok: false,
       probeId,
-      message: `Probe event not found in BigQuery after ${BQ_POLL_DELAYS_MS.length} attempts (~${totalWaitMin} min)`,
+      message: `Probe event not observed in BigQuery after ${BQ_POLL_DELAYS_MS.length} checks (configured polling waits: ~${totalWaitMin} min). It may still arrive later; event loss is not confirmed.`,
       errorDetails: `probe_id: ${probeId}\nSent at: ${new Date(start).toISOString()}`,
       ingressDetails: ingress.requestSummary,
       bqDetails: lastBq?.requestSummary,

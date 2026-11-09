@@ -1,7 +1,14 @@
 import { recordProbe } from "./metrics";
 import { isPaused, recordRun, setRunning, updateActiveRun } from "./state";
-import { slackAlertFailing, slackAlertRecovered } from "./slack";
+import { slackAlertFailing, slackAlertRecovered, slackAlertWarning } from "./slack";
 import { log, logError } from "./log";
+import {
+  createAlertState,
+  countUnconfirmedResults,
+  isWorkingHours,
+  recordAlertResult,
+  type ProbeAlertState,
+} from "./alert-policy";
 
 export interface ProbeResult {
   ok: boolean;
@@ -47,25 +54,37 @@ export interface Probe {
   run(ctx: ProbeContext): Promise<ProbeResult>;
 }
 
-/** Number of consecutive failures required before a Slack alert fires. */
-const CONSECUTIVE_FAILURES_THRESHOLD = 3;
-
-/**
- * Tracks per-probe alert state:
- * - consecutiveFailures: how many failures in a row (resets on success)
- * - alertSent: whether we've already fired a failing alert for this streak
- */
-const probeAlertState = new Map<string, { consecutiveFailures: number; alertSent: boolean }>();
+const probeAlertState = new Map<string, ProbeAlertState>();
+const warningInFlight = new Set<string>();
 
 function getAlertState(name: string) {
   if (!probeAlertState.has(name)) {
-    probeAlertState.set(name, { consecutiveFailures: 0, alertSent: false });
+    probeAlertState.set(name, createAlertState());
   }
   return probeAlertState.get(name)!;
 }
 
 export function startProbe(probe: Probe): void {
   setInterval(() => runProbe(probe), probe.schedule.ms);
+  // Independent of probe completion: queued warnings also flush while paused.
+  setInterval(() => flushSoftWarning(probe.name), 30_000);
+}
+
+async function flushSoftWarning(name: string): Promise<void> {
+  const state = getAlertState(name);
+  const warning = state.pendingWarning;
+  if (!warning || state.alertSent || warningInFlight.has(name) || !isWorkingHours()) return;
+
+  warningInFlight.add(name);
+  try {
+    const sent = await slackAlertWarning(name, warning, {
+      unconfirmed: countUnconfirmedResults(state),
+      runs: state.recentResults.length,
+    });
+    if (sent && state.pendingWarning === warning) state.pendingWarning = undefined;
+  } finally {
+    warningInFlight.delete(name);
+  }
 }
 
 export async function runProbe(probe: Probe): Promise<void> {
@@ -115,9 +134,9 @@ export async function runProbe(probe: Probe): Promise<void> {
   });
 
   const alertState = getAlertState(probe.name);
+  const transition = recordAlertResult(alertState, result.ok, Date.now(), result.message);
 
   if (!result.ok) {
-    alertState.consecutiveFailures++;
     const msg = result.message ?? "unknown error";
     logError({
       event: "probe.failed",
@@ -127,18 +146,15 @@ export async function runProbe(probe: Probe): Promise<void> {
       message: msg,
       consecutive_failures: alertState.consecutiveFailures,
     });
-    if (alertState.consecutiveFailures >= CONSECUTIVE_FAILURES_THRESHOLD && !alertState.alertSent) {
-      alertState.alertSent = true;
+    if (transition === "failing") {
       await slackAlertFailing(probe.name, msg);
     }
-  } else if (alertState.alertSent) {
+  } else if (transition === "recovered") {
     // Was alerting — now recovered
-    alertState.consecutiveFailures = 0;
-    alertState.alertSent = false;
     log({ event: "probe.recovered", probe: probe.name, run_id: runId, duration_ms: result.durationMs });
     await slackAlertRecovered(probe.name);
   } else {
-    alertState.consecutiveFailures = 0;
     log({ event: "probe.ok", probe: probe.name, run_id: runId, duration_ms: result.durationMs });
   }
+  await flushSoftWarning(probe.name);
 }

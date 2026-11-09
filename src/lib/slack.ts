@@ -1,4 +1,5 @@
 import { log, logError } from "./log";
+import { SOFT_UNCONFIRMED_THRESHOLD, SOFT_WINDOW_SIZE, type SoftWarning } from "./alert-policy";
 
 const webhookUrl = process.env.SLACK_WEBHOOK_URL ?? "";
 const environment = process.env.ENVIRONMENT ?? "unknown";
@@ -80,10 +81,10 @@ function envLabel(): string {
   return environment.toUpperCase();
 }
 
-async function postToSlack(payload: unknown): Promise<void> {
+async function postToSlack(payload: unknown): Promise<boolean> {
   if (!webhookUrl) {
     log({ event: "slack.skipped", reason: "SLACK_WEBHOOK_URL not set" });
-    return;
+    return false;
   }
   try {
     const res = await fetch(webhookUrl, {
@@ -97,12 +98,15 @@ async function postToSlack(payload: unknown): Promise<void> {
         status: res.status,
         body: await res.text(),
       });
+      return false;
     }
+    return true;
   } catch (err) {
     logError({
       event: "slack.error",
       message: err instanceof Error ? err.message : String(err),
     });
+    return false;
   }
 }
 
@@ -110,7 +114,7 @@ async function postToSlack(payload: unknown): Promise<void> {
 // Alert template
 // ---------------------------------------------------------------------------
 
-type AlertType = "failing" | "recovered" | "throttled";
+type AlertType = "failing" | "recovered" | "throttled" | "warning";
 
 interface AlertData {
   type: AlertType;
@@ -127,10 +131,16 @@ const ALERT_CONFIG: Record<
   AlertType,
   { emoji: string; color: string; title: string; defaultMessage: string }
 > = {
+  warning: {
+    emoji: "🟡",
+    color: "warning",
+    title: "Possible pipeline QoS degradation",
+    defaultMessage: "",
+  },
   failing: {
     emoji: "🔴",
     color: "danger",
-    title: "Health probe failing",
+    title: "Health probe unable to confirm delivery",
     defaultMessage: "Simulated failure — sent from the test dashboard.",
   },
   recovered: {
@@ -159,10 +169,10 @@ function buildAlertPayload(data: AlertData): unknown {
   if (type === "throttled") {
     bodyText =
       `*${probe}* has triggered more than ${MAX_TRANSITIONS} ok→fail transitions within an hour.\n\n` +
-      `We know it's failing. Check the dashboard and look into it.` +
+      `Repeated checks could not confirm delivery. Check the dashboard and look into it.` +
       (resumesAt ? ` Alerts will resume after *${resumesAt}*.` : "");
   } else if (type === "recovered") {
-    bodyText = `*${probe}* is back to healthy.`;
+    bodyText = `*${probe}* can confirm delivery again. Earlier unconfirmed events may still arrive; they have not been rechecked.`;
   } else {
     bodyText = data.message ?? cfg.defaultMessage;
   }
@@ -204,6 +214,31 @@ function buildAlertPayload(data: AlertData): unknown {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+export async function slackAlertWarning(
+  probe: string,
+  warning: SoftWarning,
+  current: { unconfirmed: number; runs: number },
+): Promise<boolean> {
+  const detectedAt = new Date(warning.detectedAt).toLocaleString("en-GB", {
+    timeZone: "Europe/Oslo",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const status = current.unconfirmed >= SOFT_UNCONFIRMED_THRESHOLD
+    ? `The warning threshold is still met: ${current.unconfirmed} of the last ${current.runs} completed checks could not confirm delivery.`
+    : `The warning threshold is no longer met: ${current.unconfirmed} of the last ${current.runs} completed checks could not confirm delivery.`;
+  const message =
+    `*${probe}*: ${warning.unconfirmed} of ${warning.runs} recent completed checks could not confirm delivery when this warning was detected (${detectedAt}, Europe/Oslo).\n\n` +
+    (warning.observation ? `*Latest observation at detection*\n${warning.observation}\n\n` : "") +
+    `${status}\n\n` +
+    `Events not observed in BigQuery within the probe's verification window may still arrive later. ` +
+    `This suggests possible QoS degradation, not confirmed event loss or an outage. Please check the pipeline during working hours.\n\n` +
+    `Warnings trigger at ${SOFT_UNCONFIRMED_THRESHOLD} unconfirmed checks within the last ${SOFT_WINDOW_SIZE} completed probes and are delivered Mon–Fri, 09:00–16:30 Europe/Oslo.`;
+  const sent = await postToSlack(buildAlertPayload({ type: "warning", probe, message }));
+  if (sent) log({ event: "slack.warning_sent", probe, detected_at: warning.detectedAt });
+  return sent;
+}
 
 export async function slackAlertFailing(
   probe: string,
