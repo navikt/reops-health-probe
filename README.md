@@ -144,3 +144,7 @@ import { myProbe } from "./src/probes/my-probe";
 
 const probes = [innblikkPipelineProbe, myProbe];
 ```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
