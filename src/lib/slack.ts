@@ -219,6 +219,7 @@ export async function slackAlertWarning(
   probe: string,
   warning: SoftWarning,
   current: { unconfirmed: number; runs: number },
+  { isTest = false }: { isTest?: boolean } = {},
 ): Promise<boolean> {
   const detectedAt = new Date(warning.detectedAt).toLocaleString("en-GB", {
     timeZone: "Europe/Oslo",
@@ -235,7 +236,7 @@ export async function slackAlertWarning(
     `Events not observed in BigQuery within the probe's verification window may still arrive later. ` +
     `This suggests possible QoS degradation, not confirmed event loss or an outage. Please check the pipeline during working hours.\n\n` +
     `Warnings trigger at ${SOFT_UNCONFIRMED_THRESHOLD} unconfirmed checks within the last ${SOFT_WINDOW_SIZE} completed probes and are delivered Mon–Fri, 09:00–16:30 Europe/Oslo.`;
-  const sent = await postToSlack(buildAlertPayload({ type: "warning", probe, message }));
+  const sent = await postToSlack(buildAlertPayload({ type: "warning", probe, message, isTest }));
   if (sent) log({ event: "slack.warning_sent", probe, detected_at: warning.detectedAt });
   return sent;
 }

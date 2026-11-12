@@ -57,6 +57,8 @@ Alerts use Slack Block Kit for rich formatting:
 
 The soft threshold and window size are defined in `src/lib/alert-policy.ts`. Windows use completion order, not elapsed time; paused/aborted runs do not count. Alert state and queued warnings are in memory and reset on process restart. Failed soft-warning deliveries are retried during working hours.
 
+The dashboard's **Test Slack alerts** menu includes **Simulate QoS warning**, alongside failure, recovery, and throttle simulations. It sends the real warning template marked **Test**, with synthetic counts of 3 unconfirmed checks out of 100. This simulation sends immediately, even outside working hours, without changing probe history or live alert state.
+
 Probe targets (URLs, project IDs, table names) are hardcoded in each probe file. To change them, edit the probe directly.
 
 ## Development

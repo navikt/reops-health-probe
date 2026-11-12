@@ -228,6 +228,9 @@ function KebabMenu({ name, paused }: { name: string; paused: boolean }) {
           <ActionMenu.Item onSelect={() => handleTestAlert("failure")} icon={<XMarkOctagonIcon aria-hidden />}>
             Simulate failure
           </ActionMenu.Item>
+          <ActionMenu.Item onSelect={() => handleTestAlert("warning")} icon={<ExclamationmarkTriangleIcon aria-hidden />}>
+            Simulate QoS warning
+          </ActionMenu.Item>
           <ActionMenu.Item onSelect={() => handleTestAlert("recovery")} icon={<CheckmarkCircleIcon aria-hidden />}>
             Simulate recovery
           </ActionMenu.Item>
